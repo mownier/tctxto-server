@@ -1,0 +1,71 @@
+syntax = "proto3";
+
+package server;
+
+option go_package = "tctxto/server";
+
+service TicTacToe {
+    rpc CreateLobby(CreateLobbyRequest) returns (CreateLobbyReply) {}
+    rpc JoinLobby(JoinLobbyRequest) returns (JoinLobbyReply) {}
+    rpc CreateGame(CreateGameRequest) returns (Empty) {}
+    rpc MakeMoke(MoveRequest) returns (Empty) {}
+    rpc SubscribeGameUpdates(GameUpdateSubscription) returns (stream GameUpdate) {}
+    rpc SubscribeToGameCreation(LobbySubscription) returns (stream GameCreatedUpdate) {}
+}
+
+message Empty {}
+
+message CreateLobbyRequest {
+    string playerName = 1;
+}
+
+message CreateLobbyReply {
+    string lobbyId = 1;
+    string playerId = 2;
+}
+
+message JoinLobbyRequest {
+    string lobbyId = 1;
+    string playerName = 2;
+}
+
+message JoinLobbyReply {
+    string playerId = 1;
+}
+
+message CreateGameRequest {
+    string lobbyId = 1;
+    string player1Id = 2;
+    string player2Id = 3;
+}
+
+message MoveRequest {
+    string gameId = 1;
+    string playerId = 2;
+    int32 position = 3;
+}
+
+message GameUpdateSubscription {
+    string gameId = 1;
+    string playerId = 2;
+}
+
+message GameUpdate {
+    string gameId = 1;
+    repeated string board = 2;
+    string mover = 3;
+    string winner = 4;
+    int32 result = 5;
+}
+
+message LobbySubscription {
+    string lobbyId = 1;
+    string playerId = 2;
+}
+
+message GameCreatedUpdate {
+    string lobbydId = 1;
+    string gameId = 2;
+    string player1Id = 3;
+    string player2Id = 4;
+}
