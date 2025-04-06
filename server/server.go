@@ -39,12 +39,34 @@ func NewServer() *Server {
 func (s *Server) CreateLobby(ctx context.Context, in *CreateLobbyRequest) (*CreateLobbyReply, error) {
 	fmt.Printf("CreateLobby in = %v\n", in)
 	player := s.addPlayer(in.PlayerName)
+	s.mu.Lock()
+	for _, lobby := range s.lobbies {
+		for _, player := range lobby.Players {
+			if player.Name == in.PlayerName {
+				s.mu.Unlock()
+				fmt.Printf("CreateLobby player has already a lobby")
+				return &CreateLobbyReply{LobbyId: lobby.ID, PlayerId: player.ID}, nil
+			}
+		}
+	}
+	s.mu.Unlock()
 	lobby := s.addLobby(player)
 	return &CreateLobbyReply{LobbyId: lobby.ID, PlayerId: player.ID}, nil
 }
 
 func (s *Server) JoinLobby(ctx context.Context, in *JoinLobbyRequest) (*JoinLobbyReply, error) {
 	fmt.Printf("JoinLobby in = %v\n", in)
+	s.mu.Lock()
+	for _, lobby := range s.lobbies {
+		for _, player := range lobby.Players {
+			if player.Name == in.PlayerName {
+				s.mu.Unlock()
+				fmt.Printf("JoinLobby player has already a lobby")
+				return &JoinLobbyReply{PlayerId: player.ID}, nil
+			}
+		}
+	}
+	s.mu.Unlock()
 	lobby, err := s.checkIfLobbyExistsWithID(in.LobbyId)
 	if err != nil {
 		fmt.Printf("JoinLobby err 1 = %v\n", err)
@@ -138,6 +160,31 @@ func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe
 		select {
 		case <-ticker.C:
 			s.mu.Lock()
+			var ongoingGame *models.Game = nil
+			for _, game := range s.games {
+				if game.Players[0].ID == in.PlayerId || game.Players[1].ID == in.PlayerId {
+					if game.Result == models.GAMERESULT_ONGOING {
+						ongoingGame = game
+						break
+					}
+				}
+			}
+			s.mu.Unlock()
+			if ongoingGame != nil {
+				fmt.Printf("SubscribeToGameCreation player %s has game that is ongoing\n", in.PlayerId)
+				update := &GameCreatedUpdate{
+					GameId:    ongoingGame.ID,
+					LobbydId:  ongoingGame.LobbyId,
+					Player1Id: ongoingGame.Players[0].ID,
+					Player2Id: ongoingGame.Players[1].ID,
+				}
+				if err := stream.Send(update); err != nil {
+					fmt.Printf("SubscribeToGameCreation err detected ongoing game = %v\n", err)
+					return err
+				}
+				continue
+			}
+			s.mu.Lock()
 			_, ok := s.createdGamesQueueLastIndex[in.LobbyId]
 			if !ok {
 				s.createdGamesQueueLastIndex[in.LobbyId] = make(map[string]int)
@@ -174,6 +221,17 @@ func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe
 				s.mu.Unlock()
 				if !ok {
 					fmt.Printf("SubscribeToGameCreation [%d] ignored err 1 = game %s not found\n", i, id)
+					continue
+				}
+				var playerFound = false
+				for _, p := range game.Players {
+					if p.ID == in.PlayerId {
+						playerFound = true
+						break
+					}
+				}
+				if !playerFound {
+					fmt.Printf("SubscribeToGameCreation [%d] ignored err 1 = player %s not found\n", i, in.PlayerId)
 					continue
 				}
 				update := &GameCreatedUpdate{
