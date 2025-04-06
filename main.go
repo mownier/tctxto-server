@@ -22,7 +22,7 @@ func main() {
 	s := grpc.NewServer()
 	reflection.Register(s)
 	server.RegisterTicTacToeServer(s, server.NewServer())
-	fmt.Printf("listening on tcp://localhost%s", port)
+	fmt.Printf("listening on tcp://localhost%s\n", port)
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}

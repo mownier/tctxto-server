@@ -14,6 +14,7 @@ type Lobby struct {
 
 type Game struct {
 	ID      string
+	LobbyId string
 	Players [2]*Player
 	Board   [9]string
 	Mover   *Player

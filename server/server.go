@@ -2,7 +2,7 @@ package server
 
 import (
 	context "context"
-	"log"
+	"fmt"
 	"sync"
 	"time"
 	"txtcto/models"
@@ -13,34 +13,41 @@ import (
 )
 
 type Server struct {
-	players             map[string]*models.Player
-	games               map[string]*models.Game
-	lobbies             map[string]*models.Lobby
-	gameUpdateStreams   map[string]map[string]TicTacToe_SubscribeGameUpdatesServer
-	gameCreationStreams map[string]map[string]TicTacToe_SubscribeToGameCreationServer
-	mu                  sync.RWMutex
+	players                    map[string]*models.Player
+	games                      map[string]*models.Game
+	lobbies                    map[string]*models.Lobby
+	createdGamesQueueLastIndex map[string]map[string]int
+	createdGamesQueue          []string
+	movesQueue                 []*MoveRequest
+	movesQueueLastIndex        map[string]map[string]int
+	mu                         sync.RWMutex
 	UnimplementedTicTacToeServer
 }
 
 func NewServer() *Server {
 	return &Server{
-		players:             make(map[string]*models.Player),
-		games:               make(map[string]*models.Game),
-		lobbies:             make(map[string]*models.Lobby),
-		gameUpdateStreams:   make(map[string]map[string]TicTacToe_SubscribeGameUpdatesServer),
-		gameCreationStreams: make(map[string]map[string]TicTacToe_SubscribeToGameCreationServer),
+		players:                    make(map[string]*models.Player),
+		games:                      make(map[string]*models.Game),
+		lobbies:                    make(map[string]*models.Lobby),
+		createdGamesQueue:          []string{},
+		createdGamesQueueLastIndex: make(map[string]map[string]int),
+		movesQueue:                 []*MoveRequest{},
+		movesQueueLastIndex:        make(map[string]map[string]int),
 	}
 }
 
 func (s *Server) CreateLobby(ctx context.Context, in *CreateLobbyRequest) (*CreateLobbyReply, error) {
+	fmt.Printf("CreateLobby in = %v\n", in)
 	player := s.addPlayer(in.PlayerName)
 	lobby := s.addLobby(player)
 	return &CreateLobbyReply{LobbyId: lobby.ID, PlayerId: player.ID}, nil
 }
 
 func (s *Server) JoinLobby(ctx context.Context, in *JoinLobbyRequest) (*JoinLobbyReply, error) {
+	fmt.Printf("JoinLobby in = %v\n", in)
 	lobby, err := s.checkIfLobbyExistsWithID(in.LobbyId)
 	if err != nil {
+		fmt.Printf("JoinLobby err 1 = %v\n", err)
 		return nil, err
 	}
 	player := s.addPlayer(in.PlayerName)
@@ -51,44 +58,159 @@ func (s *Server) JoinLobby(ctx context.Context, in *JoinLobbyRequest) (*JoinLobb
 }
 
 func (s *Server) CreateGame(ctx context.Context, in *CreateGameRequest) (*Empty, error) {
+	fmt.Printf("CreateGame in = %v\n", in)
 	lobby, err := s.checkIfLobbyExistsWithID(in.LobbyId)
 	if err != nil {
+		fmt.Printf("CreateGame err 1 = %v\n", err)
 		return nil, err
 	}
 	player1, err := s.checkIfPlayerExistsInTheLobby(lobby.ID, in.Player1Id)
 	if err != nil {
+		fmt.Printf("CreateGame err 2 = %v\n", err)
 		return nil, err
 	}
 	player2, err := s.checkIfPlayerExistsInTheLobby(lobby.ID, in.Player2Id)
 	if err != nil {
+		fmt.Printf("CreateGame err 3 = %v\n", err)
 		return nil, err
 	}
 	game, err := s.addGame(lobby, player1, player2)
 	if err != nil {
+		fmt.Printf("CreateGame err 4 = %v\n", err)
 		return nil, err
 	}
-	update := &GameCreatedUpdate{
-		LobbydId:  lobby.ID,
-		GameId:    game.ID,
-		Player1Id: player1.ID,
-		Player2Id: player2.ID,
-	}
-	s.sendGameCreatedUpdate(update)
+	s.mu.Lock()
+	s.createdGamesQueue = append(s.createdGamesQueue, game.ID)
+	s.mu.Unlock()
 	return &Empty{}, nil
 }
 
 func (s *Server) MakeMoke(ctx context.Context, in *MoveRequest) (*Empty, error) {
+	fmt.Printf("MakeMoke in = %v\n", in)
+	s.mu.Lock()
+	s.movesQueue = append(s.movesQueue, in)
+	s.mu.Unlock()
+	return &Empty{}, nil
+}
+
+func (s *Server) SubscribeGameUpdates(in *GameUpdateSubscription, stream TicTacToe_SubscribeGameUpdatesServer) error {
+	fmt.Printf("SubscribeGameUpdates in = %v\n", in)
+	ticker := time.NewTicker(1 * time.Second) // Send every 1 second
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.Lock()
+			list := s.movesQueue
+			s.movesQueue = []*MoveRequest{}
+			s.mu.Unlock()
+			if len(list) == 0 {
+				if err := stream.Send(&GameUpdate{}); err != nil {
+					fmt.Printf("SubscribeGameUpdates sending ping err = %v\n", err)
+					return err
+				}
+				continue
+			}
+			for i, in := range list {
+				update, err := s.toGameUpdate(in)
+				if err != nil {
+					fmt.Printf("SubscribeGameUpdates [%d] ignored err 1 = %v\n", i, err)
+					continue
+				}
+				err = stream.Send(update)
+				if err != nil {
+					fmt.Printf("SubscribeGameUpdates [%d] err 2 = %v\n", i, err)
+					return err
+				}
+			}
+		case <-stream.Context().Done():
+			fmt.Println("SubscribeGameUpdates Client disconnected")
+			return nil
+		}
+	}
+}
+
+func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe_SubscribeToGameCreationServer) error {
+	fmt.Printf("SubscribeToGameCreation in = %v, datetime = %v\n", in, time.Now())
+	ticker := time.NewTicker(1 * time.Second) // Send every 1 second
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			s.mu.Lock()
+			_, ok := s.createdGamesQueueLastIndex[in.LobbyId]
+			if !ok {
+				s.createdGamesQueueLastIndex[in.LobbyId] = make(map[string]int)
+			}
+			lastIndex, ok := s.createdGamesQueueLastIndex[in.LobbyId][in.PlayerId]
+			if !ok {
+				lastIndex = -1
+				s.createdGamesQueueLastIndex[in.LobbyId][in.PlayerId] = lastIndex
+			}
+			var list []string
+			if lastIndex == -1 {
+				list = s.createdGamesQueue
+			} else {
+				for i, j := range s.createdGamesQueue {
+					if i > lastIndex {
+						list = append(list, j)
+					}
+				}
+			}
+			lastIndex = lastIndex + len(list)
+			s.createdGamesQueueLastIndex[in.LobbyId][in.PlayerId] = lastIndex
+			s.mu.Unlock()
+			if len(list) == 0 {
+				if err := stream.Send(&GameCreatedUpdate{}); err != nil {
+					fmt.Printf("SubscribeToGameCreation sending ping err = %v\n", err)
+					return err
+				}
+				fmt.Printf("SubscribeToGameCreation sending ping ok, datetime = %v\n", time.Now())
+				continue
+			}
+			for i, id := range list {
+				s.mu.Lock()
+				game, ok := s.games[id]
+				s.mu.Unlock()
+				if !ok {
+					fmt.Printf("SubscribeToGameCreation [%d] ignored err 1 = game %s not found\n", i, id)
+					continue
+				}
+				update := &GameCreatedUpdate{
+					GameId:    game.ID,
+					LobbydId:  game.LobbyId,
+					Player1Id: game.Players[0].ID,
+					Player2Id: game.Players[1].ID,
+				}
+				if err := stream.Send(update); err != nil {
+					fmt.Printf("SubscribeToGameCreation [%d] err 2 = %v\n", i, err)
+					return err
+				}
+			}
+		case <-stream.Context().Done():
+			fmt.Printf("SubscribeToGameCreation Client disconnected, datetime = %v\n", time.Now())
+			return nil
+		}
+	}
+}
+
+func (s *Server) toGameUpdate(in *MoveRequest) (*GameUpdate, error) {
+	fmt.Printf("toGameUpdate in = %v\n", in)
 	game, err := s.checkGameIfExistsWithID(in.GameId)
 	if err != nil {
+		fmt.Printf("toGameUpdate err 1 = %v\n", err)
 		return nil, err
 	}
 	if in.Position < 0 || int(in.Position) >= len(game.Board) {
+		fmt.Printf("toGameUpdate err 2 = position is out-of-range\n")
 		return nil, status.Errorf(codes.InvalidArgument, "position is out-of-range")
 	}
 	if game.Board[in.Position] != "" {
+		fmt.Printf("toGameUpdate err 3 = board's position is already occupied\n")
 		return nil, status.Errorf(codes.InvalidArgument, "board's position is already occupied")
 	}
 	if game.Result == models.GAMERESULT_DRAW || game.Result == models.GAMERESULT_WIN {
+		fmt.Printf("toGameUpdate err 4 = game has ended already\n")
 		return nil, status.Errorf(codes.InvalidArgument, "game has ended already")
 	}
 	var index = -1
@@ -101,9 +223,11 @@ func (s *Server) MakeMoke(ctx context.Context, in *MoveRequest) (*Empty, error) 
 		}
 	}
 	if index == -1 || mover == nil {
+		fmt.Printf("toGameUpdate err 5 = player is not allowed in the game\n")
 		return nil, status.Errorf(codes.InvalidArgument, "player is not allowed in the game")
 	}
 	if game.Mover.ID != in.PlayerId {
+		fmt.Printf("toGameUpdate err 6 = wait for the other player to make a move\n")
 		return nil, status.Errorf(codes.InvalidArgument, "wait for the other player to make a move")
 	}
 	game.Board[in.Position] = in.PlayerId
@@ -113,48 +237,16 @@ func (s *Server) MakeMoke(ctx context.Context, in *MoveRequest) (*Empty, error) 
 		Board:  game.Board[:],
 		Mover:  game.Mover.ID,
 	}
-	err = nil
 	if s.checkWin(game) {
 		game.Winner = mover
 		game.Result = models.GAMERESULT_WIN
 		update.Winner = mover.ID
 		update.Result = int32(models.GAMERESULT_WIN)
-		err = s.sendGameUpdate(game.ID, update)
 	} else if s.checkDraw(game) {
 		game.Result = models.GAMERESULT_DRAW
 		update.Result = int32(models.GAMERESULT_DRAW)
-		err = s.sendGameUpdate(game.ID, update)
-	} else {
-		err = s.sendGameUpdate(game.ID, update)
 	}
-	if err != nil {
-		return nil, err
-	}
-	return &Empty{}, nil
-}
-
-func (s *Server) SubscribeGameUpdates(in *GameUpdateSubscription, stream TicTacToe_SubscribeGameUpdatesServer) error {
-	s.mu.Lock()
-	if _, ok := s.gameUpdateStreams[in.GameId]; !ok {
-		s.gameUpdateStreams[in.GameId] = make(map[string]TicTacToe_SubscribeGameUpdatesServer)
-	}
-	s.gameUpdateStreams[in.GameId][in.PlayerId] = stream
-	s.mu.Unlock()
-	for {
-		time.Sleep(time.Hour)
-	}
-}
-
-func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe_SubscribeToGameCreationServer) error {
-	s.mu.Lock()
-	if _, ok := s.gameCreationStreams[in.LobbyId]; !ok {
-		s.gameCreationStreams[in.LobbyId] = make(map[string]TicTacToe_SubscribeToGameCreationServer)
-	}
-	s.gameCreationStreams[in.LobbyId][in.PlayerId] = stream
-	s.mu.Unlock()
-	for {
-		time.Sleep(time.Hour)
-	}
+	return update, nil
 }
 
 func (s *Server) checkIfLobbyExistsWithID(id string) (*models.Lobby, error) {
@@ -254,6 +346,7 @@ func (s *Server) addGame(lobby *models.Lobby, player1 *models.Player, player2 *m
 	id := s.generateGameId()
 	game := &models.Game{
 		ID:      id,
+		LobbyId: lobby.ID,
 		Players: [2]*models.Player{player1, player2},
 		Board:   [9]string{"", "", "", "", "", "", "", "", ""},
 		Mover:   player1,
@@ -298,36 +391,6 @@ func (s *Server) checkWin(game *models.Game) bool {
 		}
 	}
 	return false
-}
-
-func (s *Server) sendGameUpdate(gameId string, update *GameUpdate) error {
-	s.mu.Lock()
-	streams, ok := s.gameUpdateStreams[gameId]
-	s.mu.Unlock()
-	if !ok {
-		return status.Errorf(codes.NotFound, "there is no game update streams for the game")
-	}
-	for _, stream := range streams {
-		if err := stream.Send(update); err != nil {
-			log.Printf("failed to send game update: %v", err)
-		}
-	}
-	return nil
-}
-
-func (s *Server) sendGameCreatedUpdate(update *GameCreatedUpdate) error {
-	s.mu.Lock()
-	streams, ok := s.gameCreationStreams[update.LobbydId]
-	s.mu.Unlock()
-	if !ok {
-		return status.Errorf(codes.NotFound, "there is no game creation streams for the lobby")
-	}
-	for _, stream := range streams {
-		if err := stream.Send(update); err != nil {
-			log.Printf("failed to send game created update: %v", err)
-		}
-	}
-	return nil
 }
 
 func (s *Server) switchMover(game *models.Game, index int) {
