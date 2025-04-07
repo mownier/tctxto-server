@@ -28,4 +28,5 @@ var (
 	GAMERESULT_ONGOING GameResult = 0
 	GAMERESULT_WIN     GameResult = 1
 	GAMERESULT_DRAW    GameResult = 2
+	GAMERESULT_INITIAL GameResult = 3
 )

@@ -17,9 +17,9 @@ type Server struct {
 	games                      map[string]*models.Game
 	lobbies                    map[string]*models.Lobby
 	createdGamesQueueLastIndex map[string]map[string]int
-	createdGamesQueue          []string
-	movesQueue                 []*MoveRequest
-	movesQueueLastIndex        map[string]map[string]int
+	createdGamesQueue          map[string][]string
+	gameUpdatesQueue           map[string][]*GameUpdate
+	gameUpdatesQueueLastIndex  map[string]map[string]int
 	mu                         sync.RWMutex
 	UnimplementedTicTacToeServer
 }
@@ -29,10 +29,10 @@ func NewServer() *Server {
 		players:                    make(map[string]*models.Player),
 		games:                      make(map[string]*models.Game),
 		lobbies:                    make(map[string]*models.Lobby),
-		createdGamesQueue:          []string{},
+		createdGamesQueue:          make(map[string][]string),
 		createdGamesQueueLastIndex: make(map[string]map[string]int),
-		movesQueue:                 []*MoveRequest{},
-		movesQueueLastIndex:        make(map[string]map[string]int),
+		gameUpdatesQueue:           make(map[string][]*GameUpdate),
+		gameUpdatesQueueLastIndex:  make(map[string]map[string]int),
 	}
 }
 
@@ -102,29 +102,84 @@ func (s *Server) CreateGame(ctx context.Context, in *CreateGameRequest) (*Empty,
 		return nil, err
 	}
 	s.mu.Lock()
-	s.createdGamesQueue = append(s.createdGamesQueue, game.ID)
+	_, exists := s.createdGamesQueue[in.LobbyId]
+	if !exists {
+		s.createdGamesQueue[in.LobbyId] = []string{}
+	}
+	s.createdGamesQueue[in.LobbyId] = append(s.createdGamesQueue[in.LobbyId], game.ID)
 	s.mu.Unlock()
 	return &Empty{}, nil
 }
 
 func (s *Server) MakeMoke(ctx context.Context, in *MoveRequest) (*Empty, error) {
 	fmt.Printf("MakeMoke in = %v\n", in)
+	update, err := s.toGameUpdate(in)
+	if err != nil {
+		return nil, err
+	}
+	fmt.Printf("MakeMoke game update = %v\n", update)
 	s.mu.Lock()
-	s.movesQueue = append(s.movesQueue, in)
+	_, ok := s.gameUpdatesQueue[in.GameId]
+	if !ok {
+		s.gameUpdatesQueue[in.GameId] = []*GameUpdate{}
+	}
+	s.gameUpdatesQueue[in.GameId] = append(s.gameUpdatesQueue[in.GameId], update)
 	s.mu.Unlock()
 	return &Empty{}, nil
 }
 
 func (s *Server) SubscribeGameUpdates(in *GameUpdateSubscription, stream TicTacToe_SubscribeGameUpdatesServer) error {
 	fmt.Printf("SubscribeGameUpdates in = %v\n", in)
+	s.mu.Lock()
+	game, exists := s.games[in.GameId]
+	s.mu.Unlock()
+
+	if !exists {
+		return status.Errorf(codes.InvalidArgument, "SubscribeGameUpdates game %s does not exist", in.GameId)
+	}
+
+	s.mu.Lock()
+	_, ok := s.gameUpdatesQueueLastIndex[in.GameId]
+	if !ok {
+		s.gameUpdatesQueueLastIndex[in.GameId] = make(map[string]int)
+	}
+	_, ok = s.gameUpdatesQueue[in.GameId]
+	if !ok {
+		s.gameUpdatesQueue[in.GameId] = []*GameUpdate{}
+	}
+	gameUpdate := &GameUpdate{
+		GameId: game.ID,
+		Board:  game.Board[:],
+		Mover:  game.Mover.ID,
+		Result: int32(game.Result),
+	}
+	fmt.Printf("SubscribeGameUpdates game update = %v\n", gameUpdate)
+	s.gameUpdatesQueue[in.GameId] = append(s.gameUpdatesQueue[in.GameId], gameUpdate)
+	s.mu.Unlock()
+
 	ticker := time.NewTicker(1 * time.Second) // Send every 1 second
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			s.mu.Lock()
-			list := s.movesQueue
-			s.movesQueue = []*MoveRequest{}
+			lastIndex, ok := s.gameUpdatesQueueLastIndex[in.GameId][in.PlayerId]
+			if !ok {
+				lastIndex = -1
+				s.gameUpdatesQueueLastIndex[in.GameId][in.PlayerId] = lastIndex
+			}
+			var list []*GameUpdate
+			if lastIndex == -1 {
+				list = s.gameUpdatesQueue[in.GameId]
+			} else {
+				for i, j := range s.gameUpdatesQueue[in.GameId] {
+					if i > lastIndex {
+						list = append(list, j)
+					}
+				}
+			}
+			lastIndex = lastIndex + len(list)
+			s.gameUpdatesQueueLastIndex[in.GameId][in.PlayerId] = lastIndex
 			s.mu.Unlock()
 			if len(list) == 0 {
 				if err := stream.Send(&GameUpdate{}); err != nil {
@@ -133,14 +188,8 @@ func (s *Server) SubscribeGameUpdates(in *GameUpdateSubscription, stream TicTacT
 				}
 				continue
 			}
-			for i, in := range list {
-				update, err := s.toGameUpdate(in)
-				if err != nil {
-					fmt.Printf("SubscribeGameUpdates [%d] ignored err 1 = %v\n", i, err)
-					continue
-				}
-				err = stream.Send(update)
-				if err != nil {
+			for i, update := range list {
+				if err := stream.Send(update); err != nil {
 					fmt.Printf("SubscribeGameUpdates [%d] err 2 = %v\n", i, err)
 					return err
 				}
@@ -154,41 +203,40 @@ func (s *Server) SubscribeGameUpdates(in *GameUpdateSubscription, stream TicTacT
 
 func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe_SubscribeToGameCreationServer) error {
 	fmt.Printf("SubscribeToGameCreation in = %v, datetime = %v\n", in, time.Now())
+
+	s.mu.Lock()
+	_, ok := s.createdGamesQueue[in.LobbyId]
+	if !ok {
+		s.createdGamesQueue[in.LobbyId] = []string{}
+	}
+	_, ok = s.createdGamesQueueLastIndex[in.LobbyId]
+	if !ok {
+		s.createdGamesQueueLastIndex[in.LobbyId] = make(map[string]int)
+	}
+	var ongoingGame *models.Game = nil
+	for _, game := range s.games {
+		if game.Players[0].ID == in.PlayerId || game.Players[1].ID == in.PlayerId {
+			if game.Result == models.GAMERESULT_ONGOING {
+				ongoingGame = game
+				break
+			}
+		}
+	}
+	s.mu.Unlock()
+
+	if ongoingGame != nil {
+		fmt.Printf("SubscribeToGameCreation player %s has game that is ongoing\n", in.PlayerId)
+		s.mu.Lock()
+		s.createdGamesQueue[in.LobbyId] = append(s.createdGamesQueue[in.LobbyId], ongoingGame.ID)
+		s.mu.Unlock()
+	}
+
 	ticker := time.NewTicker(1 * time.Second) // Send every 1 second
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			s.mu.Lock()
-			var ongoingGame *models.Game = nil
-			for _, game := range s.games {
-				if game.Players[0].ID == in.PlayerId || game.Players[1].ID == in.PlayerId {
-					if game.Result == models.GAMERESULT_ONGOING {
-						ongoingGame = game
-						break
-					}
-				}
-			}
-			s.mu.Unlock()
-			if ongoingGame != nil {
-				fmt.Printf("SubscribeToGameCreation player %s has game that is ongoing\n", in.PlayerId)
-				update := &GameCreatedUpdate{
-					GameId:    ongoingGame.ID,
-					LobbydId:  ongoingGame.LobbyId,
-					Player1Id: ongoingGame.Players[0].ID,
-					Player2Id: ongoingGame.Players[1].ID,
-				}
-				if err := stream.Send(update); err != nil {
-					fmt.Printf("SubscribeToGameCreation err detected ongoing game = %v\n", err)
-					return err
-				}
-				continue
-			}
-			s.mu.Lock()
-			_, ok := s.createdGamesQueueLastIndex[in.LobbyId]
-			if !ok {
-				s.createdGamesQueueLastIndex[in.LobbyId] = make(map[string]int)
-			}
 			lastIndex, ok := s.createdGamesQueueLastIndex[in.LobbyId][in.PlayerId]
 			if !ok {
 				lastIndex = -1
@@ -196,9 +244,9 @@ func (s *Server) SubscribeToGameCreation(in *LobbySubscription, stream TicTacToe
 			}
 			var list []string
 			if lastIndex == -1 {
-				list = s.createdGamesQueue
+				list = s.createdGamesQueue[in.LobbyId]
 			} else {
-				for i, j := range s.createdGamesQueue {
+				for i, j := range s.createdGamesQueue[in.LobbyId] {
 					if i > lastIndex {
 						list = append(list, j)
 					}
@@ -259,17 +307,25 @@ func (s *Server) toGameUpdate(in *MoveRequest) (*GameUpdate, error) {
 		fmt.Printf("toGameUpdate err 1 = %v\n", err)
 		return nil, err
 	}
+	update := &GameUpdate{
+		GameId: game.ID,
+		Board:  game.Board[:],
+		Mover:  game.Mover.ID,
+	}
 	if in.Position < 0 || int(in.Position) >= len(game.Board) {
-		fmt.Printf("toGameUpdate err 2 = position is out-of-range\n")
-		return nil, status.Errorf(codes.InvalidArgument, "position is out-of-range")
+		err := status.Errorf(codes.InvalidArgument, "position is out-of-range")
+		fmt.Printf("toGameUpdate err 2 = position is out-of-range, %v\n", err)
+		return update, nil
 	}
 	if game.Board[in.Position] != "" {
-		fmt.Printf("toGameUpdate err 3 = board's position is already occupied\n")
-		return nil, status.Errorf(codes.InvalidArgument, "board's position is already occupied")
+		err := status.Errorf(codes.InvalidArgument, "board's position is already occupied")
+		fmt.Printf("toGameUpdate err 3 = board's position is already occupied, %v\n", err)
+		return update, nil
 	}
 	if game.Result == models.GAMERESULT_DRAW || game.Result == models.GAMERESULT_WIN {
-		fmt.Printf("toGameUpdate err 4 = game has ended already\n")
-		return nil, status.Errorf(codes.InvalidArgument, "game has ended already")
+		err := status.Errorf(codes.InvalidArgument, "game has ended already")
+		fmt.Printf("toGameUpdate err 4 = game has ended already, %v\n", err)
+		return update, nil
 	}
 	var index = -1
 	var mover *models.Player
@@ -285,12 +341,13 @@ func (s *Server) toGameUpdate(in *MoveRequest) (*GameUpdate, error) {
 		return nil, status.Errorf(codes.InvalidArgument, "player is not allowed in the game")
 	}
 	if game.Mover.ID != in.PlayerId {
-		fmt.Printf("toGameUpdate err 6 = wait for the other player to make a move\n")
-		return nil, status.Errorf(codes.InvalidArgument, "wait for the other player to make a move")
+		err := status.Errorf(codes.InvalidArgument, "wait for the other player to make a move")
+		fmt.Printf("toGameUpdate err 6 = wait for the other player to make a move, %v\n", err)
+		return update, nil
 	}
 	game.Board[in.Position] = in.PlayerId
 	s.switchMover(game, index)
-	update := &GameUpdate{
+	update = &GameUpdate{
 		GameId: game.ID,
 		Board:  game.Board[:],
 		Mover:  game.Mover.ID,
@@ -409,7 +466,7 @@ func (s *Server) addGame(lobby *models.Lobby, player1 *models.Player, player2 *m
 		Board:   [9]string{"", "", "", "", "", "", "", "", ""},
 		Mover:   player1,
 		Winner:  nil,
-		Result:  models.GAMERESULT_ONGOING,
+		Result:  models.GAMERESULT_INITIAL,
 	}
 	s.mu.Lock()
 	s.games[id] = game
