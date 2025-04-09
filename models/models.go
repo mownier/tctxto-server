@@ -1,32 +1,33 @@
 package models
 
-type Player struct {
-	ID   string
-	Name string
-}
-
 type Lobby struct {
-	ID      string
+	Id      string
+	Name    string
 	Creator *Player
 	Players map[string]*Player
-	Games   map[string]*Game
+}
+
+type Player struct {
+	Id   string
+	Name string
+	Pass string
 }
 
 type Game struct {
-	ID      string
-	LobbyId string
-	Players [2]*Player
+	Id      string
 	Board   [9]string
 	Mover   *Player
+	Player1 *Player
+	Player2 *Player
 	Winner  *Player
 	Result  GameResult
 }
 
 type GameResult int32
 
-var (
-	GAMERESULT_ONGOING GameResult = 0
-	GAMERESULT_WIN     GameResult = 1
-	GAMERESULT_DRAW    GameResult = 2
-	GAMERESULT_INITIAL GameResult = 3
+const (
+	GameResult_INITIAL GameResult = 0
+	GameResult_ONGOING GameResult = 1
+	GameResult_WIN     GameResult = 2
+	GameResult_DRAW    GameResult = 3
 )

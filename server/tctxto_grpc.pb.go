@@ -18,12 +18,15 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TicTacToeClient interface {
-	CreateLobby(ctx context.Context, in *CreateLobbyRequest, opts ...grpc.CallOption) (*CreateLobbyReply, error)
-	JoinLobby(ctx context.Context, in *JoinLobbyRequest, opts ...grpc.CallOption) (*JoinLobbyReply, error)
+	Exchange(ctx context.Context, in *ExchangeRequest, opts ...grpc.CallOption) (*ExchangeReply, error)
+	Subscribe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error)
+	Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*Empty, error)
+	Invalidate(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
+	CreateLobby(ctx context.Context, in *CreateLobbyRequest, opts ...grpc.CallOption) (*Empty, error)
+	JoinLobby(ctx context.Context, in *JoinLobbyRequest, opts ...grpc.CallOption) (*Empty, error)
+	LeaveMyLobby(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	CreateGame(ctx context.Context, in *CreateGameRequest, opts ...grpc.CallOption) (*Empty, error)
-	MakeMoke(ctx context.Context, in *MoveRequest, opts ...grpc.CallOption) (*Empty, error)
-	SubscribeGameUpdates(ctx context.Context, in *GameUpdateSubscription, opts ...grpc.CallOption) (TicTacToe_SubscribeGameUpdatesClient, error)
-	SubscribeToGameCreation(ctx context.Context, in *LobbySubscription, opts ...grpc.CallOption) (TicTacToe_SubscribeToGameCreationClient, error)
+	MakeMove(ctx context.Context, in *MakeMoveRequest, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type ticTacToeClient struct {
@@ -34,8 +37,67 @@ func NewTicTacToeClient(cc grpc.ClientConnInterface) TicTacToeClient {
 	return &ticTacToeClient{cc}
 }
 
-func (c *ticTacToeClient) CreateLobby(ctx context.Context, in *CreateLobbyRequest, opts ...grpc.CallOption) (*CreateLobbyReply, error) {
-	out := new(CreateLobbyReply)
+func (c *ticTacToeClient) Exchange(ctx context.Context, in *ExchangeRequest, opts ...grpc.CallOption) (*ExchangeReply, error) {
+	out := new(ExchangeReply)
+	err := c.cc.Invoke(ctx, "/server.TicTacToe/Exchange", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacToeClient) Subscribe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TicTacToe_ServiceDesc.Streams[0], "/server.TicTacToe/Subscribe", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &ticTacToeSubscribeClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TicTacToe_SubscribeClient interface {
+	Recv() (*SubscriptionUpdate, error)
+	grpc.ClientStream
+}
+
+type ticTacToeSubscribeClient struct {
+	grpc.ClientStream
+}
+
+func (x *ticTacToeSubscribeClient) Recv() (*SubscriptionUpdate, error) {
+	m := new(SubscriptionUpdate)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *ticTacToeClient) Handshake(ctx context.Context, in *HandshakeRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/server.TicTacToe/Handshake", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacToeClient) Invalidate(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/server.TicTacToe/Invalidate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacToeClient) CreateLobby(ctx context.Context, in *CreateLobbyRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
 	err := c.cc.Invoke(ctx, "/server.TicTacToe/CreateLobby", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -43,9 +105,18 @@ func (c *ticTacToeClient) CreateLobby(ctx context.Context, in *CreateLobbyReques
 	return out, nil
 }
 
-func (c *ticTacToeClient) JoinLobby(ctx context.Context, in *JoinLobbyRequest, opts ...grpc.CallOption) (*JoinLobbyReply, error) {
-	out := new(JoinLobbyReply)
+func (c *ticTacToeClient) JoinLobby(ctx context.Context, in *JoinLobbyRequest, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
 	err := c.cc.Invoke(ctx, "/server.TicTacToe/JoinLobby", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *ticTacToeClient) LeaveMyLobby(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, "/server.TicTacToe/LeaveMyLobby", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -61,89 +132,28 @@ func (c *ticTacToeClient) CreateGame(ctx context.Context, in *CreateGameRequest,
 	return out, nil
 }
 
-func (c *ticTacToeClient) MakeMoke(ctx context.Context, in *MoveRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *ticTacToeClient) MakeMove(ctx context.Context, in *MakeMoveRequest, opts ...grpc.CallOption) (*Empty, error) {
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, "/server.TicTacToe/MakeMoke", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/server.TicTacToe/MakeMove", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *ticTacToeClient) SubscribeGameUpdates(ctx context.Context, in *GameUpdateSubscription, opts ...grpc.CallOption) (TicTacToe_SubscribeGameUpdatesClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TicTacToe_ServiceDesc.Streams[0], "/server.TicTacToe/SubscribeGameUpdates", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &ticTacToeSubscribeGameUpdatesClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type TicTacToe_SubscribeGameUpdatesClient interface {
-	Recv() (*GameUpdate, error)
-	grpc.ClientStream
-}
-
-type ticTacToeSubscribeGameUpdatesClient struct {
-	grpc.ClientStream
-}
-
-func (x *ticTacToeSubscribeGameUpdatesClient) Recv() (*GameUpdate, error) {
-	m := new(GameUpdate)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
-func (c *ticTacToeClient) SubscribeToGameCreation(ctx context.Context, in *LobbySubscription, opts ...grpc.CallOption) (TicTacToe_SubscribeToGameCreationClient, error) {
-	stream, err := c.cc.NewStream(ctx, &TicTacToe_ServiceDesc.Streams[1], "/server.TicTacToe/SubscribeToGameCreation", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &ticTacToeSubscribeToGameCreationClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type TicTacToe_SubscribeToGameCreationClient interface {
-	Recv() (*GameCreatedUpdate, error)
-	grpc.ClientStream
-}
-
-type ticTacToeSubscribeToGameCreationClient struct {
-	grpc.ClientStream
-}
-
-func (x *ticTacToeSubscribeToGameCreationClient) Recv() (*GameCreatedUpdate, error) {
-	m := new(GameCreatedUpdate)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 // TicTacToeServer is the server API for TicTacToe service.
 // All implementations must embed UnimplementedTicTacToeServer
 // for forward compatibility
 type TicTacToeServer interface {
-	CreateLobby(context.Context, *CreateLobbyRequest) (*CreateLobbyReply, error)
-	JoinLobby(context.Context, *JoinLobbyRequest) (*JoinLobbyReply, error)
+	Exchange(context.Context, *ExchangeRequest) (*ExchangeReply, error)
+	Subscribe(*Empty, TicTacToe_SubscribeServer) error
+	Handshake(context.Context, *HandshakeRequest) (*Empty, error)
+	Invalidate(context.Context, *Empty) (*Empty, error)
+	CreateLobby(context.Context, *CreateLobbyRequest) (*Empty, error)
+	JoinLobby(context.Context, *JoinLobbyRequest) (*Empty, error)
+	LeaveMyLobby(context.Context, *Empty) (*Empty, error)
 	CreateGame(context.Context, *CreateGameRequest) (*Empty, error)
-	MakeMoke(context.Context, *MoveRequest) (*Empty, error)
-	SubscribeGameUpdates(*GameUpdateSubscription, TicTacToe_SubscribeGameUpdatesServer) error
-	SubscribeToGameCreation(*LobbySubscription, TicTacToe_SubscribeToGameCreationServer) error
+	MakeMove(context.Context, *MakeMoveRequest) (*Empty, error)
 	mustEmbedUnimplementedTicTacToeServer()
 }
 
@@ -151,23 +161,32 @@ type TicTacToeServer interface {
 type UnimplementedTicTacToeServer struct {
 }
 
-func (UnimplementedTicTacToeServer) CreateLobby(context.Context, *CreateLobbyRequest) (*CreateLobbyReply, error) {
+func (UnimplementedTicTacToeServer) Exchange(context.Context, *ExchangeRequest) (*ExchangeReply, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Exchange not implemented")
+}
+func (UnimplementedTicTacToeServer) Subscribe(*Empty, TicTacToe_SubscribeServer) error {
+	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
+}
+func (UnimplementedTicTacToeServer) Handshake(context.Context, *HandshakeRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Handshake not implemented")
+}
+func (UnimplementedTicTacToeServer) Invalidate(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Invalidate not implemented")
+}
+func (UnimplementedTicTacToeServer) CreateLobby(context.Context, *CreateLobbyRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateLobby not implemented")
 }
-func (UnimplementedTicTacToeServer) JoinLobby(context.Context, *JoinLobbyRequest) (*JoinLobbyReply, error) {
+func (UnimplementedTicTacToeServer) JoinLobby(context.Context, *JoinLobbyRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JoinLobby not implemented")
+}
+func (UnimplementedTicTacToeServer) LeaveMyLobby(context.Context, *Empty) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method LeaveMyLobby not implemented")
 }
 func (UnimplementedTicTacToeServer) CreateGame(context.Context, *CreateGameRequest) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method CreateGame not implemented")
 }
-func (UnimplementedTicTacToeServer) MakeMoke(context.Context, *MoveRequest) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MakeMoke not implemented")
-}
-func (UnimplementedTicTacToeServer) SubscribeGameUpdates(*GameUpdateSubscription, TicTacToe_SubscribeGameUpdatesServer) error {
-	return status.Errorf(codes.Unimplemented, "method SubscribeGameUpdates not implemented")
-}
-func (UnimplementedTicTacToeServer) SubscribeToGameCreation(*LobbySubscription, TicTacToe_SubscribeToGameCreationServer) error {
-	return status.Errorf(codes.Unimplemented, "method SubscribeToGameCreation not implemented")
+func (UnimplementedTicTacToeServer) MakeMove(context.Context, *MakeMoveRequest) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MakeMove not implemented")
 }
 func (UnimplementedTicTacToeServer) mustEmbedUnimplementedTicTacToeServer() {}
 
@@ -180,6 +199,81 @@ type UnsafeTicTacToeServer interface {
 
 func RegisterTicTacToeServer(s grpc.ServiceRegistrar, srv TicTacToeServer) {
 	s.RegisterService(&TicTacToe_ServiceDesc, srv)
+}
+
+func _TicTacToe_Exchange_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExchangeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacToeServer).Exchange(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/server.TicTacToe/Exchange",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacToeServer).Exchange(ctx, req.(*ExchangeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TicTacToe_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TicTacToeServer).Subscribe(m, &ticTacToeSubscribeServer{stream})
+}
+
+type TicTacToe_SubscribeServer interface {
+	Send(*SubscriptionUpdate) error
+	grpc.ServerStream
+}
+
+type ticTacToeSubscribeServer struct {
+	grpc.ServerStream
+}
+
+func (x *ticTacToeSubscribeServer) Send(m *SubscriptionUpdate) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _TicTacToe_Handshake_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandshakeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacToeServer).Handshake(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/server.TicTacToe/Handshake",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacToeServer).Handshake(ctx, req.(*HandshakeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TicTacToe_Invalidate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacToeServer).Invalidate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/server.TicTacToe/Invalidate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacToeServer).Invalidate(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _TicTacToe_CreateLobby_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -218,6 +312,24 @@ func _TicTacToe_JoinLobby_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TicTacToe_LeaveMyLobby_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TicTacToeServer).LeaveMyLobby(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/server.TicTacToe/LeaveMyLobby",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TicTacToeServer).LeaveMyLobby(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TicTacToe_CreateGame_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateGameRequest)
 	if err := dec(in); err != nil {
@@ -236,64 +348,22 @@ func _TicTacToe_CreateGame_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _TicTacToe_MakeMoke_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MoveRequest)
+func _TicTacToe_MakeMove_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MakeMoveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TicTacToeServer).MakeMoke(ctx, in)
+		return srv.(TicTacToeServer).MakeMove(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/server.TicTacToe/MakeMoke",
+		FullMethod: "/server.TicTacToe/MakeMove",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TicTacToeServer).MakeMoke(ctx, req.(*MoveRequest))
+		return srv.(TicTacToeServer).MakeMove(ctx, req.(*MakeMoveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
-}
-
-func _TicTacToe_SubscribeGameUpdates_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(GameUpdateSubscription)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TicTacToeServer).SubscribeGameUpdates(m, &ticTacToeSubscribeGameUpdatesServer{stream})
-}
-
-type TicTacToe_SubscribeGameUpdatesServer interface {
-	Send(*GameUpdate) error
-	grpc.ServerStream
-}
-
-type ticTacToeSubscribeGameUpdatesServer struct {
-	grpc.ServerStream
-}
-
-func (x *ticTacToeSubscribeGameUpdatesServer) Send(m *GameUpdate) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func _TicTacToe_SubscribeToGameCreation_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(LobbySubscription)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(TicTacToeServer).SubscribeToGameCreation(m, &ticTacToeSubscribeToGameCreationServer{stream})
-}
-
-type TicTacToe_SubscribeToGameCreationServer interface {
-	Send(*GameCreatedUpdate) error
-	grpc.ServerStream
-}
-
-type ticTacToeSubscribeToGameCreationServer struct {
-	grpc.ServerStream
-}
-
-func (x *ticTacToeSubscribeToGameCreationServer) Send(m *GameCreatedUpdate) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 // TicTacToe_ServiceDesc is the grpc.ServiceDesc for TicTacToe service.
@@ -304,6 +374,18 @@ var TicTacToe_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*TicTacToeServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "Exchange",
+			Handler:    _TicTacToe_Exchange_Handler,
+		},
+		{
+			MethodName: "Handshake",
+			Handler:    _TicTacToe_Handshake_Handler,
+		},
+		{
+			MethodName: "Invalidate",
+			Handler:    _TicTacToe_Invalidate_Handler,
+		},
+		{
 			MethodName: "CreateLobby",
 			Handler:    _TicTacToe_CreateLobby_Handler,
 		},
@@ -312,23 +394,22 @@ var TicTacToe_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TicTacToe_JoinLobby_Handler,
 		},
 		{
+			MethodName: "LeaveMyLobby",
+			Handler:    _TicTacToe_LeaveMyLobby_Handler,
+		},
+		{
 			MethodName: "CreateGame",
 			Handler:    _TicTacToe_CreateGame_Handler,
 		},
 		{
-			MethodName: "MakeMoke",
-			Handler:    _TicTacToe_MakeMoke_Handler,
+			MethodName: "MakeMove",
+			Handler:    _TicTacToe_MakeMove_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
-			StreamName:    "SubscribeGameUpdates",
-			Handler:       _TicTacToe_SubscribeGameUpdates_Handler,
-			ServerStreams: true,
-		},
-		{
-			StreamName:    "SubscribeToGameCreation",
-			Handler:       _TicTacToe_SubscribeToGameCreation_Handler,
+			StreamName:    "Subscribe",
+			Handler:       _TicTacToe_Subscribe_Handler,
 			ServerStreams: true,
 		},
 	},
