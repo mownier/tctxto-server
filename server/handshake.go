@@ -11,22 +11,14 @@ import (
 )
 
 func (s *Server) Handshake(ctx context.Context, in *HandshakeRequest) (*Empty, error) {
-	select {
-	case <-ctx.Done():
-		return nil, status.Error(codes.Canceled, "handshake was cancelled")
-
-	default:
-		clientId, err := s.extractClientId(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return s.handshake(clientId, in)
+	clientId, err := s.extractClientIdWithCancel(ctx, "handshake was cancelled")
+	if err != nil {
+		return nil, err
 	}
+	return s.handshakeInternal(clientId, in)
 }
 
-func (s *Server) handshake(clientId string, in *HandshakeRequest) (*Empty, error) {
+func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
