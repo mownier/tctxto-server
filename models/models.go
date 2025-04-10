@@ -1,5 +1,9 @@
 package models
 
+type Client struct {
+	Id string
+}
+
 type Lobby struct {
 	Id      string
 	Name    string

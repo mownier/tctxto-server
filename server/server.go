@@ -14,7 +14,7 @@ import (
 type Server struct {
 	publicKeys map[string]bool
 
-	clients               map[string]bool
+	clients               map[string]*models.Client
 	clientUpdatesMap      map[string][]*SubscriptionUpdate
 	clientSignalMap       map[string]chan struct{}
 	clientLastIndexUpdate map[string]int
@@ -40,7 +40,7 @@ func NewServer() *Server {
 	return &Server{
 		publicKeys: publicKeys,
 
-		clients:               make(map[string]bool),
+		clients:               make(map[string]*models.Client),
 		clientUpdatesMap:      make(map[string][]*SubscriptionUpdate),
 		clientSignalMap:       make(map[string]chan struct{}),
 		clientLastIndexUpdate: make(map[string]int),

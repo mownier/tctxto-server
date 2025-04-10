@@ -2,6 +2,7 @@ package server
 
 import (
 	context "context"
+	"txtcto/models"
 
 	"github.com/google/uuid"
 	codes "google.golang.org/grpc/codes"
@@ -30,7 +31,7 @@ func (s *Server) exchange(in *ExchangeRequest) (*ExchangeReply, error) {
 	for i := 0; i < maxAttempt; i++ {
 		id := uuid.New().String()
 		if _, exists := s.clients[id]; !exists {
-			s.clients[id] = true
+			s.clients[id] = &models.Client{Id: id}
 			return &ExchangeReply{ClientId: id}, nil
 		}
 	}
