@@ -2,6 +2,7 @@ package server
 
 import (
 	context "context"
+	"fmt"
 	"sync"
 	"txtcto/models"
 
@@ -73,13 +74,32 @@ func (s *Server) extractClientId(ctx context.Context) (string, error) {
 	return clientId, nil
 }
 
-func (s *Server) indexOfPlayerWithIdFrom(slice []*Player, id string) int {
-	for i, v := range slice {
-		if v.Id == id {
-			return i
-		}
+func (s *Server) extractClientIdWithCancel(ctx context.Context, cancelMessage string) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", status.Error(codes.Canceled, cancelMessage)
+	default:
+		return s.extractClientId(ctx)
 	}
-	return -1
+}
+
+func (s *Server) getPlayerAndValidate(clientID string) (*models.Player, *Outcome) {
+	if _, exists := s.clients[clientID]; !exists {
+		return nil, &Outcome{ErrorCode: int32(codes.NotFound), ErrorMessage: "unknown client"}
+	}
+	return s.checkPlayer(clientID)
+}
+
+func (s *Server) getPlayerAndValidateByPlayerID(playerID string, playerName string) (*models.Player, *Outcome) {
+	clientID, exists := s.playerClientMap[playerID]
+	if !exists {
+		return nil, &Outcome{ErrorCode: int32(codes.Internal), ErrorMessage: fmt.Sprintf("client ID for %s not found", playerName)}
+	}
+	player, outcome := s.checkPlayer(clientID)
+	if !outcome.Ok {
+		outcome.ErrorMessage = fmt.Sprintf("%s error: %s", playerName, outcome.ErrorMessage)
+	}
+	return player, outcome
 }
 
 func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
