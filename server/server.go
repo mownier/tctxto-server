@@ -20,13 +20,12 @@ type Server struct {
 	clientPlayerMap       map[string]string
 
 	players         map[string]*models.Player
-	playerClientMap map[string]map[string]bool
+	playerClientMap map[string]string
 	playerNameIdMap map[string]string
 	playerLobbyMap  map[string]string
 	playerGameMap   map[string]string
 
-	lobbies       map[string]*models.Lobby
-	lobbyGamesMap map[string]map[string]bool
+	lobbies map[string]*models.Lobby
 
 	games map[string]*models.Game
 
@@ -47,13 +46,12 @@ func NewServer() *Server {
 		clientPlayerMap:       make(map[string]string),
 
 		players:         make(map[string]*models.Player),
-		playerClientMap: make(map[string]map[string]bool),
+		playerClientMap: make(map[string]string),
 		playerNameIdMap: make(map[string]string),
 		playerLobbyMap:  make(map[string]string),
 		playerGameMap:   make(map[string]string),
 
-		lobbies:       make(map[string]*models.Lobby),
-		lobbyGamesMap: make(map[string]map[string]bool),
+		lobbies: make(map[string]*models.Lobby),
 
 		games: make(map[string]*models.Game),
 	}
@@ -100,7 +98,7 @@ func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
 		return &models.Player{Id: ""}, outcome
 	}
 
-	if _, exists := s.playerClientMap[playerId][clientId]; !exists {
+	if _, exists := s.playerClientMap[playerId]; !exists {
 		outcome.Ok = false
 		outcome.ErrorCode = int32(codes.Unauthenticated)
 		outcome.ErrorMessage = "player is not authenticated in the client"

@@ -43,13 +43,33 @@ func (s *Server) handshake(clientId string, in *HandshakeRequest) (*Empty, error
 	if outcome.Ok {
 		updates = append(updates, s.createNavigationUpdate(NavigationPath_HOME))
 
-		s.clientPlayerMap[clientId] = player.Id
+		if oldClientId, exists := s.playerClientMap[player.Id]; exists {
+			if _, exists := s.clients[oldClientId]; exists {
+				oldClientIdUpdates := append(updates,
+					s.createPlayerClientUpdate("player is using another client"),
+					s.createNavigationUpdate(NavigationPath_LOGIN),
+				)
 
-		if _, exists := s.playerClientMap[player.Id]; !exists {
-			s.playerClientMap[player.Id] = make(map[string]bool)
+				if _, exists := s.clientUpdatesMap[oldClientId]; !exists {
+					s.clientUpdatesMap[oldClientId] = []*SubscriptionUpdate{}
+				}
+
+				s.clientUpdatesMap[oldClientId] = append(s.clientUpdatesMap[oldClientId], oldClientIdUpdates...)
+
+				if signal, exists := s.clientSignalMap[oldClientId]; exists {
+					select {
+					case signal <- struct{}{}:
+						break
+
+					default:
+						break
+					}
+				}
+			}
 		}
 
-		s.playerClientMap[player.Id][clientId] = true
+		s.clientPlayerMap[clientId] = player.Id
+		s.playerClientMap[player.Id] = clientId
 
 		if id, exists := s.playerLobbyMap[player.Id]; exists {
 			if lobby, exists := s.lobbies[id]; exists {
@@ -68,6 +88,7 @@ func (s *Server) handshake(clientId string, in *HandshakeRequest) (*Empty, error
 		select {
 		case signal <- struct{}{}:
 			break
+
 		default:
 			break
 		}

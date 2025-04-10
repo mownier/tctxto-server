@@ -92,32 +92,30 @@ func (s *Server) queueSignalUpdatesOnJoinLobby(clientId string, outcome *Outcome
 				continue
 			}
 
-			otherClientIdMap, exists := s.playerClientMap[player.Id]
+			otherClientId, exists := s.playerClientMap[player.Id]
 
 			if !exists {
 				continue
 			}
 
-			for otherClientId := range otherClientIdMap {
-				if otherClientId == clientId {
-					continue
-				}
+			if otherClientId == clientId {
+				continue
+			}
 
-				if _, exists := s.clientUpdatesMap[otherClientId]; !exists {
-					s.clientUpdatesMap[otherClientId] = []*SubscriptionUpdate{}
-				}
+			if _, exists := s.clientUpdatesMap[otherClientId]; !exists {
+				s.clientUpdatesMap[otherClientId] = []*SubscriptionUpdate{}
+			}
 
-				s.clientUpdatesMap[otherClientId] = append(s.clientUpdatesMap[otherClientId],
-					s.createMyLobbyJoinerUpdate(player),
-				)
+			s.clientUpdatesMap[otherClientId] = append(s.clientUpdatesMap[otherClientId],
+				s.createMyLobbyJoinerUpdate(player),
+			)
 
-				if signal, exists := s.clientSignalMap[otherClientId]; exists {
-					select {
-					case signal <- struct{}{}:
-						break
-					default:
-						break
-					}
+			if signal, exists := s.clientSignalMap[otherClientId]; exists {
+				select {
+				case signal <- struct{}{}:
+					break
+				default:
+					break
 				}
 			}
 		}

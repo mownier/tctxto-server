@@ -98,75 +98,81 @@ func (s *Server) clientInitialUpdates(clientId string) []*SubscriptionUpdate {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	var navigationUpdate *SubscriptionUpdate
-	var otherUpdates []*SubscriptionUpdate
-	updates := []*SubscriptionUpdate{}
+	playerId, playerExists := s.clientPlayerMap[clientId]
 
-	if playerId, ok := s.clientPlayerMap[clientId]; ok {
-		playerFound := false
-
-		if _, ok := s.players[playerId]; ok {
-			playerFound = true
-		}
-
-		var lobby *models.Lobby
-		lobbyExists := false
-
-		if lobbyId, ok := s.playerLobbyMap[playerId]; ok {
-			if l, ok := s.lobbies[lobbyId]; ok {
-				lobby = l
-				lobbyExists = true
-			}
-		}
-
-		var game *models.Game
-		gameExists := false
-
-		if gameId, ok := s.playerGameMap[playerId]; ok {
-			if g, ok := s.games[gameId]; ok {
-				game = g
-				gameExists = true
-			}
-		}
-
-		if playerFound {
-			if !lobbyExists && gameExists {
-				navigationUpdate = s.createNavigationUpdate(NavigationPath_HOME)
-
-			} else if lobbyExists && !gameExists {
-				navigationUpdate = s.createNavigationUpdate(NavigationPath_MY_LOBBY)
-
-				if lobby != nil {
-					otherUpdates = append(otherUpdates, s.createMyLobbyDetails(lobby))
-				}
-
-			} else if !lobbyExists && !gameExists {
-				navigationUpdate = s.createNavigationUpdate(NavigationPath_HOME)
-
-			} else if lobbyExists && gameExists {
-				navigationUpdate = s.createNavigationUpdate(NavigationPath_GAME)
-
-				if game != nil {
-					otherUpdates = append(otherUpdates, s.createMoveUpdates(game)...)
-				}
-
-				if lobby != nil {
-					otherUpdates = append(otherUpdates, s.createMyLobbyDetails(lobby))
-				}
-
-			} else {
-				navigationUpdate = s.createNavigationUpdate(NavigationPath_HOME)
-			}
+	if !playerExists || !s.isPlayerActive(playerId) {
+		return []*SubscriptionUpdate{
+			s.createNavigationUpdate(NavigationPath_LOGIN),
 		}
 	}
 
-	if navigationUpdate != nil {
-		updates = append(updates, navigationUpdate)
-		updates = append(updates, otherUpdates...)
-
-	} else {
-		updates = append(updates, s.createNavigationUpdate(NavigationPath_LOGIN))
+	if gameUpdates := s.getGameInitialUpdates(playerId); len(gameUpdates) > 0 {
+		return gameUpdates
 	}
 
-	return updates
+	if lobbyUpdates := s.getLobbyInitialUpdates(playerId); len(lobbyUpdates) > 0 {
+		return lobbyUpdates
+	}
+
+	return []*SubscriptionUpdate{
+		s.createNavigationUpdate(NavigationPath_HOME),
+	}
+}
+
+func (s *Server) isPlayerActive(playerId string) bool {
+	_, ok := s.players[playerId]
+
+	return ok
+}
+
+func (s *Server) getGameInitialUpdates(playerId string) []*SubscriptionUpdate {
+	if gameId, ok := s.playerGameMap[playerId]; ok {
+		if game, ok := s.games[gameId]; ok && game.Result != models.GameResult_DRAW && game.Result != models.GameResult_WIN {
+			var you *models.Player
+			var other *models.Player
+
+			if game.MoverX.Id == playerId {
+				you = game.MoverX
+				other = game.MoverO
+			}
+
+			if game.MoverO.Id == playerId {
+				you = game.MoverO
+				other = game.MoverX
+			}
+
+			updates := []*SubscriptionUpdate{
+				s.createNavigationUpdate(NavigationPath_GAME),
+				s.createGameStartUpdate(game, you, other),
+				s.createNextMoverUpdate(game),
+			}
+
+			updates = append(updates,
+				s.createMoveUpdates(game)...,
+			)
+
+			return updates
+
+		} else {
+			delete(s.playerGameMap, playerId)
+		}
+	}
+
+	return nil
+}
+
+func (s *Server) getLobbyInitialUpdates(playerId string) []*SubscriptionUpdate {
+	if lobbyId, ok := s.playerLobbyMap[playerId]; ok {
+		if lobby, ok := s.lobbies[lobbyId]; ok {
+			return []*SubscriptionUpdate{
+				s.createNavigationUpdate(NavigationPath_MY_LOBBY),
+				s.createMyLobbyDetails(lobby),
+			}
+
+		} else {
+			delete(s.playerLobbyMap, playerId)
+		}
+	}
+
+	return nil
 }

@@ -67,5 +67,5 @@ func (s *Server) cleanupInvalidatedClient(clientId, playerId string) {
 	defer s.mu.Unlock()
 
 	delete(s.clientPlayerMap, clientId)
-	delete(s.playerClientMap[playerId], clientId)
+	delete(s.playerClientMap, playerId)
 }

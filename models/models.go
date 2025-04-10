@@ -16,9 +16,10 @@ type Player struct {
 type Game struct {
 	Id      string
 	Board   [9]string
+	Creator *Player
 	Mover   *Player
-	Player1 *Player
-	Player2 *Player
+	MoverX  *Player
+	MoverO  *Player
 	Winner  *Player
 	Result  GameResult
 }

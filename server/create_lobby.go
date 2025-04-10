@@ -93,8 +93,8 @@ func (s *Server) queueSignalUpdatesOnCreateLobby(clientId string, outcome *Outco
 
 	if lobby != nil {
 		updates = append(updates,
-			s.createMyLobbyDetails(lobby),
 			s.createNavigationUpdate(NavigationPath_MY_LOBBY),
+			s.createMyLobbyDetails(lobby),
 		)
 	}
 

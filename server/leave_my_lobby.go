@@ -8,7 +8,7 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-func (s *Server) LeaveMyLobby(ctx context.Context) (*Empty, error) {
+func (s *Server) LeaveMyLobby(ctx context.Context, emp *Empty) (*Empty, error) {
 	select {
 	case <-ctx.Done():
 		return nil, status.Error(codes.Canceled, "leave my lobby was cancelled")
@@ -100,32 +100,26 @@ func (s *Server) queueSignalUpdatesOnLeaveMyLobby(clientId string, outcome *Outc
 				continue
 			}
 
-			otherClientIdMap, exists := s.playerClientMap[player.Id]
+			otherClientId, exists := s.playerClientMap[player.Id]
 
-			if !exists {
+			if !exists || otherClientId == clientId {
 				continue
 			}
 
-			for otherClientId := range otherClientIdMap {
-				if otherClientId == clientId {
-					continue
-				}
+			if _, exists := s.clientUpdatesMap[otherClientId]; !exists {
+				s.clientUpdatesMap[otherClientId] = []*SubscriptionUpdate{}
+			}
 
-				if _, exists := s.clientUpdatesMap[otherClientId]; !exists {
-					s.clientUpdatesMap[otherClientId] = []*SubscriptionUpdate{}
-				}
+			s.clientUpdatesMap[otherClientId] = append(s.clientUpdatesMap[otherClientId],
+				s.createMyLobbyLeaverUpdate(player),
+			)
 
-				s.clientUpdatesMap[otherClientId] = append(s.clientUpdatesMap[otherClientId],
-					s.createMyLobbyLeaverUpdate(player),
-				)
-
-				if signal, exists := s.clientSignalMap[otherClientId]; exists {
-					select {
-					case signal <- struct{}{}:
-						break
-					default:
-						break
-					}
+			if signal, exists := s.clientSignalMap[otherClientId]; exists {
+				select {
+				case signal <- struct{}{}:
+					break
+				default:
+					break
 				}
 			}
 		}

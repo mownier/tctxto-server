@@ -39,6 +39,10 @@ message SubscriptionUpdateData {
         MoveUpdate move_update = 12;
         WinnerUpdate winner_update = 13;
         DrawUpdate draw_update = 14;
+        GameStartUpdate game_start_update = 15;
+        NextMoverUpdate next_mover_update = 16;
+
+        PlayerClientUpdate player_client_update = 17;
     }
 }
 
@@ -123,6 +127,10 @@ message MoveUpdate {
     Move move = 1;
 }
 
+message NextMoverUpdate {
+    Mover mover = 1;
+}
+
 message MakeMoveRequest {
     int32 position = 1;
 }
@@ -149,10 +157,20 @@ message CreateGameReply {
 }
 
 message WinnerUpdate {
-    Mover winner = 1;
+    Winner winner = 1;
+    Mover mover = 2;
 }
 
 message DrawUpdate {
+}
+
+message GameStartUpdate {
+    Mover you = 1;
+    Mover other = 2;
+}
+
+message PlayerClientUpdate {
+    string message = 1;
 }
 
 enum NavigationPath {
@@ -165,4 +183,9 @@ enum NavigationPath {
 enum Mover {
     X = 0;
     O = 1;
+}
+
+enum Winner {
+    you = 0;
+    other = 1;
 }
