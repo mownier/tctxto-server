@@ -140,3 +140,23 @@ func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
 
 	return player, outcome
 }
+
+func (s *Server) queueUpdatesAndSignal(clientId string, updates []*SubscriptionUpdate) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, exists := s.clientUpdatesMap[clientId]; !exists {
+		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}
+	}
+
+	s.clientUpdatesMap[clientId] = append(s.clientUpdatesMap[clientId], updates...)
+
+	if signal, exists := s.clientSignalMap[clientId]; exists {
+		select {
+		case signal <- struct{}{}:
+			// Signal sent
+		default:
+			// Non-blocking send if the channel is full
+		}
+	}
+}
