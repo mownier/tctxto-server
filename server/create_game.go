@@ -17,120 +17,92 @@ func (s *Server) CreateGame(ctx context.Context, in *CreateGameRequest) (*Empty,
 
 	default:
 		clientId, err := s.extractClientId(ctx)
-
 		if err != nil {
 			return nil, err
 		}
-
-		return s.createGame(clientId, in)
+		return s.createGameInternal(clientId, in)
 	}
 }
 
-func (s *Server) createGame(clientId string, in *CreateGameRequest) (*Empty, error) {
+func (s *Server) createGameInternal(clientId string, in *CreateGameRequest) (*Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clients[clientId]; !exists {
-		return nil, status.Error(codes.NotFound, "unknown client")
-	}
-
-	creator, outcome := s.checkPlayer(clientId)
-
+	creator, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
 		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
 		return &Empty{}, nil
 	}
 
 	if _, exists := s.playerGameMap[creator.Id]; exists {
-		outcome.Ok = false
-		outcome.ErrorCode = int32(codes.AlreadyExists)
-		outcome.ErrorMessage = "creator is currently in a game"
-
-		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
+		s.queueSignalUpdatesOnCreateGame(clientId, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.AlreadyExists),
+			ErrorMessage: "creator is currently in a game",
+		})
 		return &Empty{}, nil
 	}
 
-	player1ClientId, exists := s.playerClientMap[in.Player1Id]
-
-	if !exists {
-		outcome.Ok = false
-		outcome.ErrorCode = int32(codes.Internal)
-		outcome.ErrorMessage = "client for player 1 not set"
-
-		return &Empty{}, nil
-	}
-
-	player1, outcome := s.checkPlayer(player1ClientId)
-
+	player1, outcome := s.getPlayerAndValidateByPlayerID(in.Player1Id, "player 1")
 	if !outcome.Ok {
-		outcome.ErrorMessage = fmt.Sprintf("player 1 error: %s", outcome.ErrorMessage)
-
 		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
 		return &Empty{}, nil
 	}
-
 	if _, exists := s.playerGameMap[in.Player1Id]; exists {
-		outcome.Ok = false
-		outcome.ErrorCode = int32(codes.AlreadyExists)
-		outcome.ErrorMessage = "player 1 is currently in a game"
-
-		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
+		s.queueSignalUpdatesOnCreateGame(clientId, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.AlreadyExists),
+			ErrorMessage: "player 1 is currently in a game",
+		})
 		return &Empty{}, nil
 	}
 
-	player2ClientId, exists := s.playerClientMap[in.Player2Id]
-
-	if !exists {
-		outcome.Ok = false
-		outcome.ErrorCode = int32(codes.Internal)
-		outcome.ErrorMessage = "client for player 2 not set"
-
-		return &Empty{}, nil
-	}
-
-	player2, outcome := s.checkPlayer(player2ClientId)
-
+	player2, outcome := s.getPlayerAndValidateByPlayerID(in.Player2Id, "player 2")
 	if !outcome.Ok {
-		outcome.ErrorMessage = fmt.Sprintf("player 2 error: %s", outcome.ErrorMessage)
-
 		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
 		return &Empty{}, nil
 	}
-
 	if _, exists := s.playerGameMap[in.Player2Id]; exists {
-		outcome.Ok = false
-		outcome.ErrorCode = int32(codes.AlreadyExists)
-		outcome.ErrorMessage = "player 2 is currently in a game"
-
-		s.queueSignalUpdatesOnCreateGame(clientId, outcome)
-
+		s.queueSignalUpdatesOnCreateGame(clientId, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.AlreadyExists),
+			ErrorMessage: "player 2 is currently in a game",
+		})
 		return &Empty{}, nil
 	}
 
 	const maxAttempt = 10
-
 	for i := 0; i < maxAttempt; i++ {
-		id := uuid.New().String()
-
-		if _, exists := s.games[id]; !exists {
+		gameID := uuid.New().String()
+		if _, exists := s.games[gameID]; !exists {
 			game := &models.Game{
-				Id:      id,
+				Id:      gameID,
 				Board:   [9]string{},
 				Creator: creator,
 				Result:  models.GameResult_INITIAL,
 			}
-
 			s.setupMover(game, player1, player2)
+			s.playerGameMap[player1.Id] = gameID
+			s.playerGameMap[player2.Id] = gameID
 
-			s.playerGameMap[player1.Id] = id
-			s.playerGameMap[player2.Id] = id
+			outcome := &Outcome{Ok: true}
 
-			outcome = &Outcome{Ok: true}
+			player1ClientId, ok1 := s.playerClientMap[in.Player1Id]
+			if !ok1 {
+				outcome.Ok = false
+				outcome.ErrorCode = int32(codes.Internal)
+				outcome.ErrorMessage = fmt.Sprintf("internal error: client ID not found for player 1: %s", in.Player1Id)
+				s.queueSignalUpdatesOnCreateGame(clientId, outcome)
+				return &Empty{}, nil
+			}
+			player2ClientId, ok2 := s.playerClientMap[in.Player2Id]
+			if !ok2 {
+				outcome.Ok = false
+				outcome.ErrorCode = int32(codes.Internal)
+				outcome.ErrorMessage = fmt.Sprintf("internal error: client ID not found for player 2: %s", in.Player2Id)
+				s.queueSignalUpdatesOnCreateGame(clientId, outcome)
+				return &Empty{}, nil
+			}
 
 			s.queueSignalUpdatesOnCreateGame(clientId, outcome)
 			s.queueSignalUpdatesOnGameStart(player1ClientId, game, player1, player2)
@@ -143,6 +115,25 @@ func (s *Server) createGame(clientId string, in *CreateGameRequest) (*Empty, err
 	}
 
 	return &Empty{}, nil
+}
+
+func (s *Server) getPlayerAndValidate(clientID string) (*models.Player, *Outcome) {
+	if _, exists := s.clients[clientID]; !exists {
+		return nil, &Outcome{ErrorCode: int32(codes.NotFound), ErrorMessage: "unknown client"}
+	}
+	return s.checkPlayer(clientID)
+}
+
+func (s *Server) getPlayerAndValidateByPlayerID(playerID string, playerName string) (*models.Player, *Outcome) {
+	clientID, exists := s.playerClientMap[playerID]
+	if !exists {
+		return nil, &Outcome{ErrorCode: int32(codes.Internal), ErrorMessage: fmt.Sprintf("client ID for %s not found", playerName)}
+	}
+	player, outcome := s.checkPlayer(clientID)
+	if !outcome.Ok {
+		outcome.ErrorMessage = fmt.Sprintf("%s error: %s", playerName, outcome.ErrorMessage)
+	}
+	return player, outcome
 }
 
 func (s *Server) queueSignalUpdatesOnCreateGame(clientId string, outcome *Outcome) {
