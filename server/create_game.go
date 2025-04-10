@@ -7,21 +7,14 @@ import (
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 )
 
 func (s *Server) CreateGame(ctx context.Context, in *CreateGameRequest) (*Empty, error) {
-	select {
-	case <-ctx.Done():
-		return nil, status.Error(codes.Canceled, "create game was cancelled")
-
-	default:
-		clientId, err := s.extractClientId(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return s.createGameInternal(clientId, in)
+	clientId, err := s.extractClientIdWithCancel(ctx, "create game was cancelled")
+	if err != nil {
+		return nil, err
 	}
+	return s.createGameInternal(clientId, in)
 }
 
 func (s *Server) createGameInternal(clientId string, in *CreateGameRequest) (*Empty, error) {
@@ -115,25 +108,6 @@ func (s *Server) createGameInternal(clientId string, in *CreateGameRequest) (*Em
 	}
 
 	return &Empty{}, nil
-}
-
-func (s *Server) getPlayerAndValidate(clientID string) (*models.Player, *Outcome) {
-	if _, exists := s.clients[clientID]; !exists {
-		return nil, &Outcome{ErrorCode: int32(codes.NotFound), ErrorMessage: "unknown client"}
-	}
-	return s.checkPlayer(clientID)
-}
-
-func (s *Server) getPlayerAndValidateByPlayerID(playerID string, playerName string) (*models.Player, *Outcome) {
-	clientID, exists := s.playerClientMap[playerID]
-	if !exists {
-		return nil, &Outcome{ErrorCode: int32(codes.Internal), ErrorMessage: fmt.Sprintf("client ID for %s not found", playerName)}
-	}
-	player, outcome := s.checkPlayer(clientID)
-	if !outcome.Ok {
-		outcome.ErrorMessage = fmt.Sprintf("%s error: %s", playerName, outcome.ErrorMessage)
-	}
-	return player, outcome
 }
 
 func (s *Server) queueSignalUpdatesOnCreateGame(clientId string, outcome *Outcome) {
