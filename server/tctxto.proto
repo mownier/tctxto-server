@@ -181,8 +181,9 @@ enum NavigationPath {
 }
 
 enum Mover {
-    X = 0;
-    O = 1;
+    UNSPECIFIED = 0;
+    X = 1;
+    O = 2;
 }
 
 enum Winner {
