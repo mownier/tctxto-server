@@ -2,39 +2,28 @@ package server
 
 import (
 	context "context"
-
-	codes "google.golang.org/grpc/codes"
-	status "google.golang.org/grpc/status"
 )
 
 func (s *Server) Invalidate(ctx context.Context, emp *Empty) (*Empty, error) {
-	select {
-	case <-ctx.Done():
-		return nil, status.Error(codes.Canceled, "invalidate was cancelled")
-
-	default:
-		clientId, err := s.extractClientId(ctx)
-
-		if err != nil {
-			return nil, err
-		}
-
-		return s.invalidate(clientId)
+	clientId, err := s.extractClientIdWithCancel(ctx, "invalidate was cancelled")
+	if err != nil {
+		return nil, err
 	}
+	return s.invalidateInternal(clientId)
 }
 
-func (s *Server) invalidate(clientId string) (*Empty, error) {
+func (s *Server) invalidateInternal(clientId string) (*Empty, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clients[clientId]; !exists {
-		return nil, status.Error(codes.NotFound, "unknown client")
+	player, outcome := s.getPlayerAndValidate(clientId)
+	if !outcome.Ok {
+		s.queueSignalUpdatesOnInvalidate(clientId, outcome)
+		return &Empty{}, nil
 	}
 
-	player, outcome := s.checkPlayer(clientId)
-
 	s.cleanupInvalidatedClient(clientId, player.Id)
-	s.queueSignalUpdatesOnInvalidate(clientId, outcome)
+	s.queueSignalUpdatesOnInvalidate(clientId, &Outcome{Ok: true})
 
 	return &Empty{}, nil
 }
