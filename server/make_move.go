@@ -18,14 +18,14 @@ func (s *Server) MakeMove(ctx context.Context, in *MakeMoveRequest) (*Empty, err
 }
 
 func (s *Server) makeMoveInternal(clientId string, position int32) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createMakeMoveReply(outcome)})
 		return &Empty{}, nil
 	}
+
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
 
 	gameId, exists := s.playerGameMap[player.Id]
 	if !exists {

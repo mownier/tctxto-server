@@ -15,17 +15,20 @@ func (s *Server) Exchange(ctx context.Context, in *ExchangeRequest) (*ExchangeRe
 		return nil, status.Error(codes.Canceled, "exchange was cancelled")
 
 	default:
-		return s.exchange(in)
+		return s.exchangeInternal(in)
 	}
 }
 
-func (s *Server) exchange(in *ExchangeRequest) (*ExchangeReply, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
+func (s *Server) exchangeInternal(in *ExchangeRequest) (*ExchangeReply, error) {
+	s.consumerMu.RLock()
 	if _, exists := s.consumers[in.PublicKey]; !exists {
+		s.consumerMu.RUnlock()
 		return nil, status.Error(codes.NotFound, "invalid public key")
 	}
+	s.consumerMu.RUnlock()
+
+	s.playerDataMu.Lock()
+	defer s.playerDataMu.Unlock()
 
 	const maxAttempt = 10
 	for i := 0; i < maxAttempt; i++ {

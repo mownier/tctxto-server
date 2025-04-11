@@ -19,10 +19,10 @@ func (s *Server) Handshake(ctx context.Context, in *HandshakeRequest) (*Empty, e
 }
 
 func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.playerDataMu.Lock()
 
 	if _, exists := s.clients[clientId]; !exists {
+		s.playerDataMu.Unlock()
 		return nil, status.Error(codes.NotFound, "unknown client")
 	}
 
@@ -47,11 +47,17 @@ func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empt
 		s.clientPlayerMap[clientId] = player.Id
 		s.playerClientMap[player.Id] = clientId
 
+		s.playerDataMu.Unlock() // Release playerDataMu before accessing lobby data
+
+		s.lobbyGameMu.RLock()
 		if id, exists := s.playerLobbyMap[player.Id]; exists {
 			if lobby, exists := s.lobbies[id]; exists {
 				updates = append(updates, s.createMyLobbyDetails(lobby))
 			}
 		}
+		s.lobbyGameMu.RUnlock()
+	} else {
+		s.playerDataMu.Unlock()
 	}
 
 	s.queueUpdatesAndSignal(clientId, updates)

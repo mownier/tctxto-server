@@ -18,14 +18,14 @@ func (s *Server) CreateLobby(ctx context.Context, in *CreateLobbyRequest) (*Empt
 }
 
 func (s *Server) createLobbyInternal(clientId string, in *CreateLobbyRequest) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateLobbyReply(outcome)})
 		return &Empty{}, nil
 	}
+
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
 
 	if _, exists := s.playerLobbyMap[player.Id]; exists {
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateLobbyReply(&Outcome{

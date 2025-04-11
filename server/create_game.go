@@ -18,16 +18,16 @@ func (s *Server) CreateGame(ctx context.Context, in *CreateGameRequest) (*Empty,
 }
 
 func (s *Server) createGameInternal(clientId string, in *CreateGameRequest) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	creator, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateGameReply(outcome)})
 		return &Empty{}, nil
 	}
 
+	s.lobbyGameMu.Lock()
+
 	if _, exists := s.playerGameMap[creator.Id]; exists {
+		s.lobbyGameMu.Unlock()
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateGameReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.AlreadyExists),

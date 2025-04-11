@@ -12,25 +12,27 @@ import (
 )
 
 type Server struct {
-	consumers map[string]*models.Consumer
+	consumerMu sync.RWMutex
+	consumers  map[string]*models.Consumer
 
-	clients               map[string]*models.Client
-	clientUpdatesMap      map[string][]*SubscriptionUpdate
+	clientSubscriptionMu  sync.RWMutex
 	clientSignalMap       map[string]chan struct{}
+	clientUpdatesMap      map[string][]*SubscriptionUpdate
 	clientLastIndexUpdate map[string]int
-	clientPlayerMap       map[string]string
 
-	players         map[string]*models.Player
+	playerDataMu    sync.RWMutex
+	clients         map[string]*models.Client
+	clientPlayerMap map[string]string
 	playerClientMap map[string]string
+	players         map[string]*models.Player
 	playerNameIdMap map[string]string
-	playerLobbyMap  map[string]string
-	playerGameMap   map[string]string
 
-	lobbies map[string]*models.Lobby
+	lobbyGameMu    sync.RWMutex
+	lobbies        map[string]*models.Lobby
+	playerLobbyMap map[string]string
+	games          map[string]*models.Game
+	playerGameMap  map[string]string
 
-	games map[string]*models.Game
-
-	mu sync.RWMutex
 	UnimplementedTicTacToeServer
 }
 
@@ -82,27 +84,37 @@ func (s *Server) extractClientIdWithCancel(ctx context.Context, cancelMessage st
 }
 
 func (s *Server) getPlayerAndValidate(clientID string) (*models.Player, *Outcome) {
-	if _, exists := s.clients[clientID]; !exists {
+	s.playerDataMu.RLock()
+	_, exists := s.clients[clientID]
+	s.playerDataMu.RUnlock()
+
+	if !exists {
 		return nil, &Outcome{ErrorCode: int32(codes.NotFound), ErrorMessage: "unknown client"}
 	}
+
 	return s.checkPlayer(clientID)
 }
 
 func (s *Server) getPlayerAndValidateByPlayerID(playerID string, playerName string) (*models.Player, *Outcome) {
+	s.playerDataMu.RLock()
 	clientID, exists := s.playerClientMap[playerID]
+	s.playerDataMu.RUnlock()
+
 	if !exists {
 		return nil, &Outcome{ErrorCode: int32(codes.Internal), ErrorMessage: fmt.Sprintf("client ID for %s not found", playerName)}
 	}
+
 	player, outcome := s.checkPlayer(clientID)
 	if !outcome.Ok {
 		outcome.ErrorMessage = fmt.Sprintf("%s error: %s", playerName, outcome.ErrorMessage)
 	}
+
 	return player, outcome
 }
 
 func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.playerDataMu.Lock()
+	defer s.playerDataMu.Unlock()
 
 	outcome := &Outcome{}
 
@@ -140,8 +152,8 @@ func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
 }
 
 func (s *Server) queueUpdatesAndSignal(clientId string, updates []*SubscriptionUpdate) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clientSubscriptionMu.Lock()
+	defer s.clientSubscriptionMu.Unlock()
 
 	if _, exists := s.clientUpdatesMap[clientId]; !exists {
 		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}

@@ -37,15 +37,15 @@ func (s *Server) Subscribe(emp *Empty, stream TicTacToe_SubscribeServer) error {
 }
 
 func (s *Server) isClientKnown(clientId string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.playerDataMu.RLock()
+	defer s.playerDataMu.RUnlock()
 	_, exists := s.clients[clientId]
 	return exists
 }
 
 func (s *Server) setupClientSubscriptionChannels(clientId string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clientSubscriptionMu.Lock()
+	defer s.clientSubscriptionMu.Unlock()
 	if _, exists := s.clientSignalMap[clientId]; !exists {
 		s.clientSignalMap[clientId] = make(chan struct{}, 1)
 	}
@@ -55,22 +55,22 @@ func (s *Server) setupClientSubscriptionChannels(clientId string) {
 }
 
 func (s *Server) getClientSignalChannel(clientId string) <-chan struct{} {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.clientSubscriptionMu.RLock()
+	defer s.clientSubscriptionMu.RUnlock()
 	return s.clientSignalMap[clientId]
 }
 
 func (s *Server) sendInitialClientUpdates(clientId string, stream TicTacToe_SubscribeServer) {
 	initialUpdates := s.clientInitialUpdates(clientId)
-	s.mu.Lock()
+	s.clientSubscriptionMu.Lock()
 	s.clientUpdatesMap[clientId] = append(s.clientUpdatesMap[clientId], initialUpdates...)
-	s.mu.Unlock()
+	s.clientSubscriptionMu.Unlock()
 	s.sendClientUpdates(clientId, stream)
 }
 
 func (s *Server) sendClientUpdates(clientId string, stream TicTacToe_SubscribeServer) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clientSubscriptionMu.Lock()
+	defer s.clientSubscriptionMu.Unlock()
 
 	lastIndex, exists := s.clientLastIndexUpdate[clientId]
 	if !exists {
@@ -102,8 +102,8 @@ func (s *Server) sendClientUpdates(clientId string, stream TicTacToe_SubscribeSe
 }
 
 func (s *Server) clientInitialUpdates(clientId string) []*SubscriptionUpdate {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.playerDataMu.Lock()
+	defer s.playerDataMu.Unlock()
 
 	playerId, playerExists := s.clientPlayerMap[clientId]
 
@@ -123,15 +123,15 @@ func (s *Server) clientInitialUpdates(clientId string) []*SubscriptionUpdate {
 }
 
 func (s *Server) isPlayerActive(playerId string) bool {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.playerDataMu.RLock()
+	defer s.playerDataMu.RUnlock()
 	_, ok := s.players[playerId]
 	return ok
 }
 
 func (s *Server) getGameInitialUpdates(playerId string) []*SubscriptionUpdate {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
 
 	if gameId, ok := s.playerGameMap[playerId]; ok {
 		if game, ok := s.games[gameId]; ok && game.Result < models.GameResult_DRAW {
@@ -164,8 +164,8 @@ func (s *Server) getGamePlayers(game *models.Game, playerId string) (*models.Pla
 }
 
 func (s *Server) getLobbyInitialUpdates(playerId string) []*SubscriptionUpdate {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
 
 	if lobbyId, ok := s.playerLobbyMap[playerId]; ok {
 		if lobby, ok := s.lobbies[lobbyId]; ok {
@@ -181,7 +181,7 @@ func (s *Server) getLobbyInitialUpdates(playerId string) []*SubscriptionUpdate {
 }
 
 func (s *Server) cleanupClientSubscription(clientId string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.clientSubscriptionMu.Lock()
+	defer s.clientSubscriptionMu.Unlock()
 	delete(s.clientSignalMap, clientId)
 }

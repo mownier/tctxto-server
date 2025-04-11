@@ -13,8 +13,8 @@ func (s *Server) Invalidate(ctx context.Context, emp *Empty) (*Empty, error) {
 }
 
 func (s *Server) invalidateInternal(clientId string) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.playerDataMu.Lock()
+	defer s.playerDataMu.Unlock()
 
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
@@ -29,8 +29,8 @@ func (s *Server) invalidateInternal(clientId string) (*Empty, error) {
 }
 
 func (s *Server) cleanupInvalidatedClient(clientId, playerId string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.playerDataMu.Lock()
+	defer s.playerDataMu.Unlock()
 
 	delete(s.clientPlayerMap, clientId)
 	delete(s.playerClientMap, playerId)

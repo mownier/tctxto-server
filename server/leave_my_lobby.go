@@ -16,17 +16,17 @@ func (s *Server) LeaveMyLobby(ctx context.Context, emp *Empty) (*Empty, error) {
 }
 
 func (s *Server) leaveMyLobbyInternal(clientId string) (*Empty, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createLeaveMyLobbyReply(outcome)})
 		return &Empty{}, nil
 	}
 
+	s.lobbyGameMu.Lock()
+
 	lobbyId, exists := s.playerLobbyMap[player.Id]
 	if !exists {
+		s.lobbyGameMu.Unlock()
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createLeaveMyLobbyReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.Internal),
@@ -37,6 +37,7 @@ func (s *Server) leaveMyLobbyInternal(clientId string) (*Empty, error) {
 
 	lobby, exists := s.lobbies[lobbyId]
 	if !exists {
+		s.lobbyGameMu.Unlock()
 		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createLeaveMyLobbyReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.NotFound),
@@ -55,6 +56,9 @@ func (s *Server) leaveMyLobbyInternal(clientId string) (*Empty, error) {
 	}
 
 	leavingPlayer := lobby.Players[player.Id]
+
+	s.lobbyGameMu.Unlock()
+
 	s.cleanupLeavingLobbyMember(lobby, player.Id)
 
 	updates := []*SubscriptionUpdate{s.createLeaveMyLobbyReply(&Outcome{Ok: true})}
@@ -70,11 +74,15 @@ func (s *Server) leaveMyLobbyInternal(clientId string) (*Empty, error) {
 }
 
 func (s *Server) notifyLobbyMembersOnLeave(leavingClientId string, leavingPlayer *models.Player) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
+
 	if lobbyId, exists := s.playerLobbyMap[leavingPlayer.Id]; exists {
 		if lobby, exists := s.lobbies[lobbyId]; exists {
 			for _, p := range lobby.Players {
+				s.playerDataMu.Lock()
+				defer s.playerDataMu.Unlock()
+
 				if p == nil || s.playerClientMap[p.Id] == leavingClientId {
 					continue
 				}
@@ -87,8 +95,8 @@ func (s *Server) notifyLobbyMembersOnLeave(leavingClientId string, leavingPlayer
 }
 
 func (s *Server) cleanupLeavingLobbyMember(lobby *models.Lobby, playerId string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.lobbyGameMu.Lock()
+	defer s.lobbyGameMu.Unlock()
 
 	delete(s.playerLobbyMap, playerId)
 	delete(lobby.Players, playerId)
