@@ -12,7 +12,7 @@ import (
 )
 
 type Server struct {
-	publicKeys map[string]bool
+	consumers map[string]*models.Consumer
 
 	clients               map[string]*models.Client
 	clientUpdatesMap      map[string][]*SubscriptionUpdate
@@ -34,11 +34,9 @@ type Server struct {
 	UnimplementedTicTacToeServer
 }
 
-func NewServer() *Server {
-	publicKeys := make(map[string]bool)
-	publicKeys["12345"] = true
+func NewServer(consumers map[string]*models.Consumer) *Server {
 	return &Server{
-		publicKeys: publicKeys,
+		consumers: consumers,
 
 		clients:               make(map[string]*models.Client),
 		clientUpdatesMap:      make(map[string][]*SubscriptionUpdate),
