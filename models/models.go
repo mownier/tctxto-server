@@ -1,5 +1,10 @@
 package models
 
+type Consumer struct {
+	PublicKey string `json:"public_key"`
+	Name      string `json:"name"`
+}
+
 type Client struct {
 	Id string
 }
