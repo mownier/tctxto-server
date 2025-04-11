@@ -32,3 +32,6 @@ build/
 
 # sqlite
 *.sqlite
+
+# consumers
+consumers.json
