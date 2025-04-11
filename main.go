@@ -35,25 +35,21 @@ func main() {
 
 	if consumersPath == "" {
 		log.Fatalln("need to specify the path to the consumers JSON file (TCTXTO_CONSUMERS environment variable)")
-		os.Exit(1)
 	}
 
 	consumersData, err := os.ReadFile(consumersPath)
 	if err != nil {
 		log.Fatalf("error reading consumers file at %s: %v\n", consumersPath, err)
-		os.Exit(1)
 	}
 
 	var consumers []*models.Consumer
 	err = json.Unmarshal(consumersData, &consumers)
 	if err != nil {
 		log.Fatalf("error unmarshalling consumers from %s: %v\n", consumersPath, err)
-		os.Exit(1)
 	}
 
 	if len(consumers) == 0 {
 		log.Fatalf("no consumers found in %s\n", consumersPath)
-		os.Exit(1)
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
