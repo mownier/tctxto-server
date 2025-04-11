@@ -23,7 +23,7 @@ func (s *Server) exchange(in *ExchangeRequest) (*ExchangeReply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.publicKeys[in.PublicKey]; !exists {
+	if _, exists := s.consumers[in.PublicKey]; !exists {
 		return nil, status.Error(codes.NotFound, "invalid public key")
 	}
 
