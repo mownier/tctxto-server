@@ -7,7 +7,7 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-func (s *Server) Subscribe(stream TicTacToe_SubscribeServer) error {
+func (s *Server) Subscribe(emp *Empty, stream TicTacToe_SubscribeServer) error {
 	clientId, err := s.extractClientId(stream.Context())
 	if err != nil {
 		return err
