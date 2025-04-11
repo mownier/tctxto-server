@@ -18,37 +18,14 @@ func (s *Server) invalidateInternal(clientId string) (*Empty, error) {
 
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
-		s.queueSignalUpdatesOnInvalidate(clientId, outcome)
+		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createInvalidateReply(outcome), s.createNavigationUpdate(NavigationPath_LOGIN)})
 		return &Empty{}, nil
 	}
 
 	s.cleanupInvalidatedClient(clientId, player.Id)
-	s.queueSignalUpdatesOnInvalidate(clientId, &Outcome{Ok: true})
+	s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createInvalidateReply(&Outcome{Ok: true}), s.createNavigationUpdate(NavigationPath_LOGIN)})
 
 	return &Empty{}, nil
-}
-
-func (s *Server) queueSignalUpdatesOnInvalidate(clientId string, outcome *Outcome) {
-	updates := []*SubscriptionUpdate{
-		s.createInvalidateReply(outcome),
-		s.createNavigationUpdate(NavigationPath_LOGIN),
-	}
-
-	if _, exists := s.clientUpdatesMap[clientId]; !exists {
-		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}
-	}
-
-	s.clientUpdatesMap[clientId] = append(s.clientUpdatesMap[clientId], updates...)
-
-	if signal, exists := s.clientSignalMap[clientId]; exists {
-		select {
-		case signal <- struct{}{}:
-
-			break
-		default:
-			break
-		}
-	}
 }
 
 func (s *Server) cleanupInvalidatedClient(clientId, playerId string) {

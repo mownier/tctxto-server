@@ -26,37 +26,21 @@ func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empt
 		return nil, status.Error(codes.NotFound, "unknown client")
 	}
 
-	updates := []*SubscriptionUpdate{}
+	updates := []*SubscriptionUpdate{s.createHandshakeReply(&Outcome{})}
 
 	player, outcome := s.addPlayer(in)
-
-	updates = append(updates, s.createHandshakeReply(outcome))
+	updates[0] = s.createHandshakeReply(outcome)
 
 	if outcome.Ok {
 		updates = append(updates, s.createNavigationUpdate(NavigationPath_HOME))
 
 		if oldClientId, exists := s.playerClientMap[player.Id]; exists {
 			if _, exists := s.clients[oldClientId]; exists {
-				oldClientIdUpdates := append(updates,
+				oldClientIdUpdates := []*SubscriptionUpdate{
 					s.createPlayerClientUpdate("player is using another client"),
 					s.createNavigationUpdate(NavigationPath_LOGIN),
-				)
-
-				if _, exists := s.clientUpdatesMap[oldClientId]; !exists {
-					s.clientUpdatesMap[oldClientId] = []*SubscriptionUpdate{}
 				}
-
-				s.clientUpdatesMap[oldClientId] = append(s.clientUpdatesMap[oldClientId], oldClientIdUpdates...)
-
-				if signal, exists := s.clientSignalMap[oldClientId]; exists {
-					select {
-					case signal <- struct{}{}:
-						break
-
-					default:
-						break
-					}
-				}
+				s.queueUpdatesAndSignal(oldClientId, append(updates, oldClientIdUpdates...))
 			}
 		}
 
@@ -70,22 +54,7 @@ func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empt
 		}
 	}
 
-	if _, exists := s.clientUpdatesMap[clientId]; !exists {
-		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}
-	}
-
-	s.clientUpdatesMap[clientId] = append(s.clientUpdatesMap[clientId], updates...)
-
-	if signal, exists := s.clientSignalMap[clientId]; exists {
-		select {
-		case signal <- struct{}{}:
-			break
-
-		default:
-			break
-		}
-	}
-
+	s.queueUpdatesAndSignal(clientId, updates)
 	return &Empty{}, nil
 }
 
@@ -98,7 +67,6 @@ func (s *Server) addPlayer(in *HandshakeRequest) (*models.Player, *Outcome) {
 		outcome.Ok = false
 		outcome.ErrorCode = int32(codes.AlreadyExists)
 		outcome.ErrorMessage = "player name already exists"
-
 		return nil, outcome
 	}
 
@@ -107,30 +75,22 @@ func (s *Server) addPlayer(in *HandshakeRequest) (*models.Player, *Outcome) {
 	if exists {
 		if player.Name == in.PlayerName && player.Pass == in.PlayerPass {
 			outcome.Ok = true
-
 			return player, outcome
 		}
-
 		outcome.Ok = false
 		outcome.ErrorCode = int32(codes.PermissionDenied)
 		outcome.ErrorMessage = "invalid player credentials"
-
 		return nil, outcome
 	}
 
 	const maxAttempt = 10
-
 	for i := 0; i < maxAttempt; i++ {
 		id := uuid.New().String()
-
 		if _, exists := s.players[id]; !exists {
 			outcome.Ok = true
-
 			player := &models.Player{Id: id, Name: in.PlayerName}
-
 			s.players[id] = player
 			s.playerNameIdMap[in.PlayerName] = id
-
 			return player, outcome
 		}
 	}
@@ -138,6 +98,5 @@ func (s *Server) addPlayer(in *HandshakeRequest) (*models.Player, *Outcome) {
 	outcome.Ok = false
 	outcome.ErrorCode = int32(codes.Internal)
 	outcome.ErrorMessage = fmt.Sprintf("failed to add player with name %s", in.PlayerName)
-
 	return nil, outcome
 }

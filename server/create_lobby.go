@@ -23,33 +23,35 @@ func (s *Server) createLobbyInternal(clientId string, in *CreateLobbyRequest) (*
 
 	player, outcome := s.getPlayerAndValidate(clientId)
 	if !outcome.Ok {
-		s.queueSignalUpdatesOnCreateLobby(clientId, outcome, nil)
+		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateLobbyReply(outcome)})
 		return &Empty{}, nil
 	}
 
 	if _, exists := s.playerLobbyMap[player.Id]; exists {
-		outcome = &Outcome{
+		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateLobbyReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.AlreadyExists),
 			ErrorMessage: "player has already a lobby",
-		}
-		s.queueSignalUpdatesOnCreateLobby(clientId, outcome, nil)
+		})})
 		return &Empty{}, nil
 	}
 
 	lobby, err := s.attemptCreateLobby(player, in.Name)
 	if err != nil {
-		outcome := &Outcome{
+		s.queueUpdatesAndSignal(clientId, []*SubscriptionUpdate{s.createCreateLobbyReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.Internal),
 			ErrorMessage: err.Error(),
-		}
-		s.queueSignalUpdatesOnCreateLobby(clientId, outcome, nil)
+		})})
 		return &Empty{}, nil
 	}
 
 	outcome = &Outcome{Ok: true}
-	s.queueSignalUpdatesOnCreateLobby(clientId, outcome, lobby)
+	updates := []*SubscriptionUpdate{s.createCreateLobbyReply(outcome)}
+	if lobby != nil {
+		updates = append(updates, s.createNavigationUpdate(NavigationPath_MY_LOBBY), s.createMyLobbyDetails(lobby))
+	}
+	s.queueUpdatesAndSignal(clientId, updates)
 	return &Empty{}, nil
 }
 
@@ -71,32 +73,4 @@ func (s *Server) attemptCreateLobby(creator *models.Player, lobbyName string) (*
 		}
 	}
 	return nil, errors.New("unable to create lobby after multiple attempts")
-}
-
-func (s *Server) queueSignalUpdatesOnCreateLobby(clientId string, outcome *Outcome, lobby *models.Lobby) {
-	updates := []*SubscriptionUpdate{
-		s.createCreateLobbyReply(outcome),
-	}
-
-	if lobby != nil {
-		updates = append(updates,
-			s.createNavigationUpdate(NavigationPath_MY_LOBBY),
-			s.createMyLobbyDetails(lobby),
-		)
-	}
-
-	if _, exists := s.clientUpdatesMap[clientId]; !exists {
-		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}
-	}
-
-	s.clientUpdatesMap[clientId] = append(s.clientUpdatesMap[clientId], updates...)
-
-	if signal, exists := s.clientSignalMap[clientId]; exists {
-		select {
-		case signal <- struct{}{}:
-			break
-		default:
-			break
-		}
-	}
 }
