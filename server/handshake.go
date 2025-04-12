@@ -3,6 +3,7 @@ package server
 import (
 	context "context"
 	"fmt"
+	"log"
 	"txtcto/models"
 
 	"github.com/google/uuid"
@@ -59,6 +60,8 @@ func (s *Server) handshakeInternal(clientId string, in *HandshakeRequest) (*Empt
 	} else {
 		s.playerDataMu.Unlock()
 	}
+
+	log.Printf("handshakeInternal clientId = %s, updates = %d\n", clientId, len(updates))
 
 	s.queueUpdatesAndSignal(clientId, updates)
 	return &Empty{}, nil
