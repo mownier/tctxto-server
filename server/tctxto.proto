@@ -43,10 +43,15 @@ message SubscriptionUpdateData {
         NextMoverUpdate next_mover_update = 16;
 
         PlayerClientUpdate player_client_update = 17;
+
+        Ping ping = 18;
     }
 }
 
 message Empty { 
+}
+
+message Ping {
 }
 
 message Outcome {
