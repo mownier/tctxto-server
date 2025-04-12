@@ -3,6 +3,7 @@ package server
 import (
 	context "context"
 	"fmt"
+	"log"
 	"sync"
 	"txtcto/models"
 
@@ -33,6 +34,12 @@ type Server struct {
 	games          map[string]*models.Game
 	playerGameMap  map[string]string
 
+	activeSubscriptionsMu sync.RWMutex
+	activeSubscriptions   map[string]bool
+
+	clientLastNavPathUpdateMu sync.RWMutex
+	clientLastNavPathUpdate   map[string]NavigationPath
+
 	UnimplementedTicTacToeServer
 }
 
@@ -40,11 +47,12 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 	return &Server{
 		consumers: consumers,
 
-		clients:               make(map[string]*models.Client),
-		clientUpdatesMap:      make(map[string][]*SubscriptionUpdate),
-		clientSignalMap:       make(map[string]chan struct{}),
-		clientLastIndexUpdate: make(map[string]int),
-		clientPlayerMap:       make(map[string]string),
+		clients:                 make(map[string]*models.Client),
+		clientUpdatesMap:        make(map[string][]*SubscriptionUpdate),
+		clientSignalMap:         make(map[string]chan struct{}),
+		clientLastIndexUpdate:   make(map[string]int),
+		clientPlayerMap:         make(map[string]string),
+		clientLastNavPathUpdate: make(map[string]NavigationPath),
 
 		players:         make(map[string]*models.Player),
 		playerClientMap: make(map[string]string),
@@ -55,6 +63,8 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		lobbies: make(map[string]*models.Lobby),
 
 		games: make(map[string]*models.Game),
+
+		activeSubscriptions: make(map[string]bool),
 	}
 }
 
@@ -152,8 +162,12 @@ func (s *Server) checkPlayer(clientId string) (*models.Player, *Outcome) {
 }
 
 func (s *Server) queueUpdatesAndSignal(clientId string, updates []*SubscriptionUpdate) {
+	log.Printf("queueUpdatesAndSignal = %s, updates = %d\n", clientId, len(updates))
+
 	s.clientSubscriptionMu.Lock()
 	defer s.clientSubscriptionMu.Unlock()
+
+	log.Printf("queueUpdatesAndSignal = %s, updates = %d, LOCK\n", clientId, len(updates))
 
 	if _, exists := s.clientUpdatesMap[clientId]; !exists {
 		s.clientUpdatesMap[clientId] = []*SubscriptionUpdate{}
@@ -169,4 +183,6 @@ func (s *Server) queueUpdatesAndSignal(clientId string, updates []*SubscriptionU
 			// Non-blocking send if the channel is full
 		}
 	}
+
+	log.Printf("queueUpdatesAndSignal = %s, updates = %d, UNLOCK\n", clientId, len(updates))
 }
