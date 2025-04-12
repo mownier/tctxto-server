@@ -219,3 +219,11 @@ func (s *Server) createDrawupdate() *SubscriptionUpdate {
 		},
 	}
 }
+
+func (s *Server) createPing() *SubscriptionUpdate {
+	return &SubscriptionUpdate{
+		Data: &SubscriptionUpdateData{
+			SubscriptionUpdateDataType: &SubscriptionUpdateData_Ping{},
+		},
+	}
+}
