@@ -45,7 +45,9 @@ func (s *Server) createMyLobbyDetails(lobby *models.Lobby) *ServerUpdate {
 	players := make([]*Player, 0, len(lobby.Players))
 	for _, player := range lobby.Players {
 		if player != nil {
-			players = append(players, &Player{Id: player.Id, Name: player.Name})
+			if assignedId, exists := lobby.PlayerAssignedId[player.Id]; exists {
+				players = append(players, &Player{Id: assignedId, Name: player.DisplayName})
+			}
 		}
 	}
 	return &ServerUpdate{
