@@ -17,9 +17,10 @@ type Lobby struct {
 }
 
 type Player struct {
-	Id   string
-	Name string
-	Pass string
+	Id          string
+	Name        string
+	Pass        string
+	DisplayName string
 }
 
 type Game struct {
