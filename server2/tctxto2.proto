@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package server2;
+
+option go_package = "tctxto/server2";
+
+service TicTacToe {
+    rpc Subscribe(SubscribeRequest) returns (stream ServerUpdate) {}
+    rpc Notify(ClientUpdate) returns (Empty) {}   
+}
+
+message Empty {
+}
+
+message SubscribeRequest {
+    SubscriptionAction action = 1;
+}
+
+message ClientUpdate {
+    oneof type {
+        SignUpRequest sign_up_request = 1;
+        SignInRequest sign_in_request = 2;
+        SignOutRequest sign_out_request = 3;
+
+        CreateLobbyRequest create_lobby_request = 4;
+        JoinLobbyRequest join_lobby_request = 5;
+
+        CreateGameRequest create_game_request = 6;
+        MakeMoveRequest make_move_request = 7;
+    }
+}
+
+message ServerUpdate {
+    oneof type {
+        Ping ping = 1;
+        
+        ClientAssignmentUpdate client_assignment_update = 2;
+
+        NavigationUpdate navigation_update = 3;
+
+        SignUpReply sign_up_reply = 4;
+        SignInReply sign_in_reply = 5;
+        SignOutReply sign_out_reply = 6;
+
+        MyLobbyDetails my_lobby_details = 7;
+        MyLobbyJoinerUpdate my_lobby_joiner_update = 8;
+        MyLobbyLeaverUpdate my_lobby_leaver_update = 9;
+        CreateLobbyReply create_lobby_reply = 10;
+        JoinLobbyReply join_lobby_reply = 11;
+        LeaveMyLobbyReply leave_my_lobby_reply = 12;
+        
+        CreateGameReply create_game_reply = 13;
+        MakeMoveReply make_move_reply = 14;
+        MoveUpdate move_update = 15;
+        WinnerUpdate winner_update = 16;
+        DrawUpdate draw_update = 17;
+        GameStartUpdate game_start_update = 18;
+        NextMoverUpdate next_mover_update = 19;
+        
+        PlayerClientUpdate player_client_update = 20;
+        PlayerDisplayNameUpdate player_display_name_update = 21;
+    }
+}
+
+message Ping {
+}
+
+message Lobby {
+    string name = 1;
+    repeated Player players = 2;
+}
+
+message Player {
+    string id = 1;
+    string name = 2;
+}
+
+message ClientAssignmentUpdate {
+    string client_id = 1;
+}
+
+message NavigationUpdate {
+    NavigationPath path = 1;
+    bool refresh = 2;
+}
+
+message SignInRequest {
+    string name = 1;
+    string pass = 2;
+}
+
+message SignInReply {
+    Outcome Outcome = 1;
+}
+
+message SignUpRequest {
+    string name = 1;
+    string pass = 2;
+}
+
+message SignUpReply {
+    Outcome outcome = 1;
+}
+
+message SignOutRequest {
+}
+
+message SignOutReply {
+    Outcome outcome = 1;
+}
+
+message Outcome {
+    bool ok = 1;
+    int32 error_code = 2;
+    string error_message = 3;
+}
+
+message MyLobbyDetails {
+    Lobby lobby = 1;
+}
+
+message MyLobbyJoinerUpdate {
+    Player player = 1;
+}
+
+message MyLobbyLeaverUpdate {
+    Player player = 1;
+}
+
+message LeaveMyLobbyReply {
+    Outcome outcome = 1;
+}
+
+message JoinLobbyRequest {
+    string lobby_id = 1;
+}
+
+message JoinLobbyReply {
+    Outcome outcome = 1;
+}
+
+message CreateLobbyReply {
+    Outcome outcome = 1;
+}
+
+message Move {
+    Mover mover = 1;
+    int32 position = 2;
+}
+
+message MoveUpdate {
+    Move move = 1;
+}
+
+message NextMoverUpdate {
+    Mover mover = 1;
+}
+
+message MakeMoveRequest {
+    int32 position = 1;
+}
+
+message MakeMoveReply {
+    Outcome outcome = 1;
+}
+
+message CreateLobbyRequest {
+    string name = 1;
+}
+
+message CreateGameRequest {
+    string player1_id = 1;
+    string player2_id = 2;
+}
+
+message CreateGameReply {
+    Outcome outcome = 1;
+}
+
+message WinnerUpdate {
+    Winner winner = 1;
+    Mover mover = 2;
+}
+
+message DrawUpdate {
+}
+
+message GameStartUpdate {
+    Mover you = 1;
+    Mover other = 2;
+}
+
+message PlayerClientUpdate {
+    string message = 1;
+}
+
+message PlayerDisplayNameUpdate {
+    string displayName = 1;
+}
+
+enum NavigationPath {
+    WELCOME = 0;
+    HOME = 1;
+    MY_LOBBY = 2;
+    GAME = 3;
+}
+
+enum Mover {
+    UNSPECIFIED = 0;
+    X = 1;
+    O = 2;
+}
+
+enum Winner {
+    you = 0;
+    other = 1;
+}
+
+enum SubscriptionAction {
+    INITIAL = 0;
+    RE_SUBSCRIBE = 1;
+}
