@@ -10,10 +10,12 @@ type Client struct {
 }
 
 type Lobby struct {
-	Id      string
-	Name    string
-	Creator *Player
-	Players map[string]*Player
+	Id               string
+	Name             string
+	Creator          *Player
+	Players          map[string]*Player
+	AssignedIds      map[string]string
+	PlayerAssignedId map[string]string
 }
 
 type Player struct {
