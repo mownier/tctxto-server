@@ -9,10 +9,13 @@ import (
 	"strconv"
 	"strings"
 	"txtcto/models"
-	"txtcto/server"
+	"txtcto/server2"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 func main() {
@@ -68,7 +71,16 @@ func main() {
 		consumersMap[consumer.PublicKey] = consumer
 	}
 
-	server.RegisterTicTacToeServer(s, server.NewServer(consumersMap))
+	server2.RegisterTicTacToeServer(s, server2.NewServer(consumersMap))
+
+	// Start a separate HTTP server for pprof (choose a different port)
+	go func() {
+		pprofPort := ":6060" // Example port
+		log.Printf("pprof server listening on %s", pprofPort)
+		if err := http.ListenAndServe(pprofPort, nil); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("pprof server ListenAndServe: %v", err)
+		}
+	}()
 
 	fmt.Printf("listening on tcp://localhost:%s\n", port)
 
