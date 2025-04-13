@@ -153,3 +153,13 @@ func (s *Server) createSignOutReply(outcome *Outcome) *ServerUpdate {
 		},
 	}
 }
+
+func (s *Server) createCreateLobbyReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_CreateLobbyReply{
+			CreateLobbyReply: &CreateLobbyReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
