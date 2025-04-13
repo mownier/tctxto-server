@@ -20,12 +20,11 @@ func (s *Server) createPing() *ServerUpdate {
 	}
 }
 
-func (s *Server) createNavigationUpdate(path NavigationPath, refresh bool) *ServerUpdate {
+func (s *Server) createNavigationUpdate(path NavigationPath) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_NavigationUpdate{
 			NavigationUpdate: &NavigationUpdate{
-				Path:    path,
-				Refresh: refresh,
+				Path: path,
 			},
 		},
 	}

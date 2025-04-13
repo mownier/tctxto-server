@@ -51,7 +51,7 @@ func (s *Server) createLobby(clientId string, in *CreateLobbyRequest) error {
 
 	s.queueServerUpdatesAndSignal(clientId,
 		s.createCreateLobbyReply(&Outcome{Ok: true}),
-		s.createNavigationUpdate(NavigationPath_MY_LOBBY, true),
+		s.createNavigationUpdate(NavigationPath_MY_LOBBY),
 		s.createMyLobbyDetails(lobby),
 	)
 

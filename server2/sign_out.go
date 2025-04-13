@@ -38,7 +38,8 @@ func (s *Server) signOut(clientId string) error {
 
 	s.queueServerUpdatesAndSignal(clientId,
 		s.createSignOutReply(&Outcome{Ok: true}),
-		s.createNavigationUpdate(NavigationPath_WELCOME, true),
+		s.createPlayerDisplayNameUpdate(""),
+		s.createNavigationUpdate(NavigationPath_WELCOME),
 	)
 
 	return nil

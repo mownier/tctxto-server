@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TicTacToeClient interface {
-	Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error)
+	Subscribe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error)
 	Notify(ctx context.Context, in *ClientUpdate, opts ...grpc.CallOption) (*Empty, error)
 }
 
@@ -30,7 +30,7 @@ func NewTicTacToeClient(cc grpc.ClientConnInterface) TicTacToeClient {
 	return &ticTacToeClient{cc}
 }
 
-func (c *ticTacToeClient) Subscribe(ctx context.Context, in *SubscribeRequest, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error) {
+func (c *ticTacToeClient) Subscribe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error) {
 	stream, err := c.cc.NewStream(ctx, &TicTacToe_ServiceDesc.Streams[0], "/server2.TicTacToe/Subscribe", opts...)
 	if err != nil {
 		return nil, err
@@ -75,7 +75,7 @@ func (c *ticTacToeClient) Notify(ctx context.Context, in *ClientUpdate, opts ...
 // All implementations must embed UnimplementedTicTacToeServer
 // for forward compatibility
 type TicTacToeServer interface {
-	Subscribe(*SubscribeRequest, TicTacToe_SubscribeServer) error
+	Subscribe(*Empty, TicTacToe_SubscribeServer) error
 	Notify(context.Context, *ClientUpdate) (*Empty, error)
 	mustEmbedUnimplementedTicTacToeServer()
 }
@@ -84,7 +84,7 @@ type TicTacToeServer interface {
 type UnimplementedTicTacToeServer struct {
 }
 
-func (UnimplementedTicTacToeServer) Subscribe(*SubscribeRequest, TicTacToe_SubscribeServer) error {
+func (UnimplementedTicTacToeServer) Subscribe(*Empty, TicTacToe_SubscribeServer) error {
 	return status.Errorf(codes.Unimplemented, "method Subscribe not implemented")
 }
 func (UnimplementedTicTacToeServer) Notify(context.Context, *ClientUpdate) (*Empty, error) {
@@ -104,7 +104,7 @@ func RegisterTicTacToeServer(s grpc.ServiceRegistrar, srv TicTacToeServer) {
 }
 
 func _TicTacToe_Subscribe_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(SubscribeRequest)
+	m := new(Empty)
 	if err := stream.RecvMsg(m); err != nil {
 		return err
 	}

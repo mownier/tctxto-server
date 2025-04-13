@@ -5,15 +5,11 @@ package server2;
 option go_package = "tctxto/server2";
 
 service TicTacToe {
-    rpc Subscribe(SubscribeRequest) returns (stream ServerUpdate) {}
+    rpc Subscribe(Empty) returns (stream ServerUpdate) {}
     rpc Notify(ClientUpdate) returns (Empty) {}   
 }
 
 message Empty {
-}
-
-message SubscribeRequest {
-    SubscriptionAction action = 1;
 }
 
 message ClientUpdate {
@@ -81,7 +77,6 @@ message ClientAssignmentUpdate {
 
 message NavigationUpdate {
     NavigationPath path = 1;
-    bool refresh = 2;
 }
 
 message SignInRequest {
@@ -214,9 +209,4 @@ enum Mover {
 enum Winner {
     you = 0;
     other = 1;
-}
-
-enum SubscriptionAction {
-    INITIAL = 0;
-    RE_SUBSCRIBE = 1;
 }

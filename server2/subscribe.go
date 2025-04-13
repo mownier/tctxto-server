@@ -9,7 +9,7 @@ import (
 	status "google.golang.org/grpc/status"
 )
 
-func (s *Server) Subscribe(in *SubscribeRequest, stream TicTacToe_SubscribeServer) error {
+func (s *Server) Subscribe(emp *Empty, stream TicTacToe_SubscribeServer) error {
 	publicKey, err := s.extractPublicKeyWithCancel(stream.Context(), "subscribe was cancelled")
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func (s *Server) Subscribe(in *SubscribeRequest, stream TicTacToe_SubscribeServe
 		s.clientSignal.set(clientId, make(chan struct{}, 1))
 	}
 
-	s.sendInitialServerUpdates(clientId, in.Action, stream)
+	s.sendInitialServerUpdates(clientId, stream)
 
 	signal, _ := s.clientSignal.get(clientId)
 
@@ -96,10 +96,6 @@ func (s *Server) sendServerUpdates(stream TicTacToe_SubscribeServer, clientId st
 			err = e
 			break
 		}
-		switch update := serverUpdate.Type.(type) {
-		case *ServerUpdate_NavigationUpdate:
-			s.clientLastNavigationPath.set(clientId, update.NavigationUpdate.Path)
-		}
 		sentCount++
 	}
 
@@ -115,8 +111,8 @@ func (s *Server) sendServerUpdates(stream TicTacToe_SubscribeServer, clientId st
 	return err
 }
 
-func (s *Server) sendInitialServerUpdates(clientId string, action SubscriptionAction, stream TicTacToe_SubscribeServer) {
-	initialUpdates := s.initialServerUpdates(clientId, action)
+func (s *Server) sendInitialServerUpdates(clientId string, stream TicTacToe_SubscribeServer) {
+	initialUpdates := s.initialServerUpdates(clientId)
 
 	serverUpdates, exists := s.clientServerUpdates.get(clientId)
 	if !exists {
@@ -135,77 +131,39 @@ func (s *Server) sendInitialServerUpdates(clientId string, action SubscriptionAc
 	s.sendServerUpdates(stream, clientId)
 }
 
-func (s *Server) initialServerUpdates(clientId string, action SubscriptionAction) []*ServerUpdate {
-	playerId, playerExists := s.clientPlayer.get(clientId)
-	if !playerExists || !s.isPlayerActive(playerId) {
-		lastPath, exists := s.clientLastNavigationPath.get(clientId)
-		var refresh bool
-		if !exists || lastPath != NavigationPath_WELCOME || action == SubscriptionAction_INITIAL {
-			refresh = true
-		} else {
-			refresh = false
-		}
-		return []*ServerUpdate{s.createNavigationUpdate(NavigationPath_WELCOME, refresh)}
+func (s *Server) initialServerUpdates(clientId string) []*ServerUpdate {
+	player, outcome := s.validatePlayer(clientId)
+	if !outcome.Ok {
+		return []*ServerUpdate{s.createNavigationUpdate(NavigationPath_WELCOME)}
 	}
 
-	gameUpdates := s.getGameInitialUpdates(clientId, playerId, action)
+	updates := []*ServerUpdate{s.createPlayerDisplayNameUpdate(player.DisplayName)}
+
+	gameUpdates := s.getGameInitialUpdates(clientId, player.Id)
 	if len(gameUpdates) > 0 {
-		return gameUpdates
+		return append(updates, gameUpdates...)
 	}
 
-	lobbyUpdates := s.getLobbyInitialUpdates(clientId, playerId, action)
+	lobbyUpdates := s.getLobbyInitialUpdates(clientId, player.Id)
 	if len(lobbyUpdates) > 0 {
-		return lobbyUpdates
+		return append(updates, lobbyUpdates...)
 	}
 
-	lastPath, exists := s.clientLastNavigationPath.get(clientId)
-	var refresh bool
-	if !exists || lastPath != NavigationPath_HOME || action == SubscriptionAction_INITIAL {
-		refresh = true
-	} else {
-		refresh = false
-	}
-
-	return []*ServerUpdate{s.createNavigationUpdate(NavigationPath_HOME, refresh)}
-}
-
-func (s *Server) isPlayerActive(playerId string) bool {
-	_, ok := s.players.get(playerId)
-	return ok
+	return append(updates, s.createNavigationUpdate(NavigationPath_HOME))
 }
 
 func (s *Server) cleanupClientResources(clientId string) {
 	s.clientSignal.delete(clientId)
 }
 
-func (s *Server) getLobbyInitialUpdates(clientId, playerId string, action SubscriptionAction) []*ServerUpdate {
+func (s *Server) getLobbyInitialUpdates(clientId, playerId string) []*ServerUpdate {
 	lobbyId, ok := s.playerLobby.get(playerId)
 	if ok {
 		if lobby, ok := s.lobbies.get(lobbyId); ok {
-			updates := []*ServerUpdate{}
-
-			lastPath, exists := s.clientLastNavigationPath.get(clientId)
-			var refresh bool
-			if !exists || lastPath != NavigationPath_MY_LOBBY || action == SubscriptionAction_INITIAL {
-				refresh = true
-			} else {
-				refresh = false
+			return []*ServerUpdate{
+				s.createNavigationUpdate(NavigationPath_MY_LOBBY),
+				s.createMyLobbyDetails(lobby),
 			}
-
-			updates = append(updates, s.createNavigationUpdate(NavigationPath_MY_LOBBY, refresh))
-
-			lastLobby, exists := s.clientLastLobby.get(clientId)
-			if !exists || !models.DeepCompareLobby(lobby, lastLobby) || action == SubscriptionAction_INITIAL {
-				refresh = true
-			} else {
-				refresh = false
-			}
-			if refresh {
-				s.clientLastLobby.set(clientId, lobby.DeepCopy())
-				updates = append(updates, s.createMyLobbyDetails(lobby))
-			}
-
-			return updates
 		} else {
 			s.playerLobby.delete(playerId)
 		}
@@ -213,22 +171,14 @@ func (s *Server) getLobbyInitialUpdates(clientId, playerId string, action Subscr
 	return nil
 }
 
-func (s *Server) getGameInitialUpdates(clientId, playerId string, action SubscriptionAction) []*ServerUpdate {
+func (s *Server) getGameInitialUpdates(clientId, playerId string) []*ServerUpdate {
 	gameId, ok := s.playerGame.get(playerId)
 	if ok {
 		if game, ok := s.games.get(gameId); ok {
 			if game.Result < models.GameResult_DRAW {
 				updates := []*ServerUpdate{}
 
-				lastPath, exists := s.clientLastNavigationPath.get(clientId)
-				var refresh bool
-				if !exists || lastPath != NavigationPath_GAME || action == SubscriptionAction_INITIAL {
-					refresh = true
-				} else {
-					refresh = false
-				}
-
-				updates = append(updates, s.createNavigationUpdate(NavigationPath_GAME, refresh))
+				updates = append(updates, s.createNavigationUpdate(NavigationPath_GAME))
 
 				you, other := s.getGamePlayers(game, playerId)
 

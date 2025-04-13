@@ -37,7 +37,8 @@ func (s *Server) signIn(clientId string, in *SignInRequest) error {
 			s.clientPlayer.delete(oldClientId)
 
 			s.queueServerUpdatesAndSignal(oldClientId,
-				s.createNavigationUpdate(NavigationPath_WELCOME, true),
+				s.createNavigationUpdate(NavigationPath_WELCOME),
+				s.createPlayerDisplayNameUpdate(""),
 				s.createPlayerClientUpdate("You are using another client"),
 			)
 		}
@@ -48,9 +49,8 @@ func (s *Server) signIn(clientId string, in *SignInRequest) error {
 
 	updates := []*ServerUpdate{
 		s.createSignInReply(&Outcome{Ok: true}),
-		s.createPlayerDisplayNameUpdate(player.DisplayName),
 	}
-	updates = append(updates, s.initialServerUpdates(clientId, SubscriptionAction_INITIAL)...)
+	updates = append(updates, s.initialServerUpdates(clientId)...)
 
 	s.queueServerUpdatesAndSignal(clientId, updates...)
 

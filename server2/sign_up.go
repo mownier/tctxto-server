@@ -44,8 +44,8 @@ func (s *Server) signUp(clientId string, in *SignUpRequest) error {
 
 	s.queueServerUpdatesAndSignal(clientId,
 		s.createSignUpReply(&Outcome{Ok: true}),
+		s.createNavigationUpdate(NavigationPath_HOME),
 		s.createPlayerDisplayNameUpdate(player.DisplayName),
-		s.createNavigationUpdate(NavigationPath_HOME, true),
 	)
 
 	return nil

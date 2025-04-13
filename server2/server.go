@@ -18,7 +18,6 @@ type Server struct {
 	clientSignal                *safeMap[string, chan struct{}]
 	clientServerUpdates         *safeMap[string, []*ServerUpdate]
 	clientLastIndexServerUpdate *safeMap[string, int]
-	clientLastNavigationPath    *safeMap[string, NavigationPath]
 	clientPlayer                *safeMap[string, string]
 	playerGame                  *safeMap[string, string]
 	games                       *safeMap[string, *models.Game]
@@ -26,7 +25,6 @@ type Server struct {
 	playerClient                *safeMap[string, string]
 	playerLobby                 *safeMap[string, string]
 	lobbies                     *safeMap[string, *models.Lobby]
-	clientLastLobby             *safeMap[string, *models.Lobby]
 
 	UnimplementedTicTacToeServer
 }
@@ -39,7 +37,6 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		clientSignal:                newSafeMap[string, chan struct{}](),
 		clientServerUpdates:         newSafeMap[string, []*ServerUpdate](),
 		clientLastIndexServerUpdate: newSafeMap[string, int](),
-		clientLastNavigationPath:    newSafeMap[string, NavigationPath](),
 		clientPlayer:                newSafeMap[string, string](),
 		playerGame:                  newSafeMap[string, string](),
 		games:                       newSafeMap[string, *models.Game](),
@@ -47,7 +44,6 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		playerClient:                newSafeMap[string, string](),
 		playerLobby:                 newSafeMap[string, string](),
 		lobbies:                     newSafeMap[string, *models.Lobby](),
-		clientLastLobby:             newSafeMap[string, *models.Lobby](),
 	}
 }
 
