@@ -26,6 +26,7 @@ type Server struct {
 	playerClient                *safeMap[string, string]
 	playerLobby                 *safeMap[string, string]
 	lobbies                     *safeMap[string, *models.Lobby]
+	clientLastLobby             *safeMap[string, *models.Lobby]
 
 	UnimplementedTicTacToeServer
 }
@@ -46,6 +47,7 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		playerClient:                newSafeMap[string, string](),
 		playerLobby:                 newSafeMap[string, string](),
 		lobbies:                     newSafeMap[string, *models.Lobby](),
+		clientLastLobby:             newSafeMap[string, *models.Lobby](),
 	}
 }
 
