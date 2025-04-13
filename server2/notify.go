@@ -24,6 +24,8 @@ func (s *Server) Notify(ctx context.Context, update *ClientUpdate) (*Empty, erro
 		err = s.signOut(clientId)
 	case *ClientUpdate_SignInRequest:
 		err = s.signIn(clientId, update.SignInRequest)
+	case *ClientUpdate_CreateLobbyRequest:
+		err = s.createLobby(clientId, update.CreateLobbyRequest)
 	}
 
 	if err != nil {
