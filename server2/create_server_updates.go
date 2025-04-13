@@ -52,7 +52,7 @@ func (s *Server) createMyLobbyDetails(lobby *models.Lobby) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_MyLobbyDetails{
 			MyLobbyDetails: &MyLobbyDetails{
-				Lobby: &Lobby{Name: lobby.Name, Players: players},
+				Lobby: &Lobby{Id: lobby.Id, Name: lobby.Name, Players: players},
 			},
 		},
 	}
@@ -157,6 +157,16 @@ func (s *Server) createCreateLobbyReply(outcome *Outcome) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_CreateLobbyReply{
 			CreateLobbyReply: &CreateLobbyReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createJoinLobbyReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_JoinLobbyReply{
+			JoinLobbyReply: &JoinLobbyReply{
 				Outcome: outcome,
 			},
 		},

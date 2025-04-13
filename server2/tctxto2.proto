@@ -62,8 +62,9 @@ message Ping {
 }
 
 message Lobby {
-    string name = 1;
-    repeated Player players = 2;
+    string id = 1;
+    string name = 2;
+    repeated Player players = 3;
 }
 
 message Player {
