@@ -193,7 +193,17 @@ func (s *Server) getLobbyInitialUpdates(clientId, playerId string, action Subscr
 			}
 
 			updates = append(updates, s.createNavigationUpdate(NavigationPath_MY_LOBBY, refresh))
-			updates = append(updates, s.createMyLobbyDetails(lobby))
+
+			lastLobby, exists := s.clientLastLobby.get(clientId)
+			if !exists || !models.DeepCompareLobby(lobby, lastLobby) || action == SubscriptionAction_INITIAL {
+				refresh = true
+			} else {
+				refresh = false
+			}
+			if refresh {
+				s.clientLastLobby.set(clientId, lobby.DeepCopy())
+				updates = append(updates, s.createMyLobbyDetails(lobby))
+			}
 
 			return updates
 		} else {
