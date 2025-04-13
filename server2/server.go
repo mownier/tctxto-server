@@ -128,3 +128,25 @@ func (s *Server) generateRandomString(n int) string {
 	}
 	return string(b)
 }
+
+func (s *Server) validatePlayer(clientId string) (*models.Player, *Outcome) {
+	playerId, exists := s.clientPlayer.get(clientId)
+	if !exists {
+		return nil, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.NotFound),
+			ErrorMessage: "player not found",
+		}
+	}
+
+	player, exists := s.players.get(playerId)
+	if !exists {
+		return nil, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.NotFound),
+			ErrorMessage: "player details not found",
+		}
+	}
+
+	return player, &Outcome{Ok: true}
+}
