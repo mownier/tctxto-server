@@ -28,6 +28,8 @@ func (s *Server) Notify(ctx context.Context, update *ClientUpdate) (*Empty, erro
 		err = s.createLobby(clientId, update.CreateLobbyRequest)
 	case *ClientUpdate_JoinLobbyRequest:
 		err = s.joinLobby(clientId, update.JoinLobbyRequest)
+	case *ClientUpdate_LeaveMyLobbyRequest:
+		err = s.leaveMyLobby(clientId)
 	}
 
 	if err != nil {

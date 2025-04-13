@@ -172,3 +172,33 @@ func (s *Server) createJoinLobbyReply(outcome *Outcome) *ServerUpdate {
 		},
 	}
 }
+
+func (s *Server) createLeaveMyLobbyReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_LeaveMyLobbyReply{
+			LeaveMyLobbyReply: &LeaveMyLobbyReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createMyLobbyLeaverUpdate(id, name string) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_MyLobbyLeaverUpdate{
+			MyLobbyLeaverUpdate: &MyLobbyLeaverUpdate{
+				Player: &Player{Id: id, Name: name},
+			},
+		},
+	}
+}
+
+func (s *Server) createMyLobbyJoinerUpdate(id, name string) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_MyLobbyJoinerUpdate{
+			MyLobbyJoinerUpdate: &MyLobbyJoinerUpdate{
+				Player: &Player{Id: id, Name: name},
+			},
+		},
+	}
+}

@@ -38,6 +38,17 @@ func (s *Server) joinLobby(clientId string, in *JoinLobbyRequest) error {
 
 	s.playerLobby.set(player.Id, lobby.Id)
 
+	for _, member := range lobby.Players {
+		if member.Id == player.Id {
+			continue
+		}
+		if memberClientId, exists := s.playerClient.get(member.Id); exists {
+			s.queueServerUpdatesAndSignal(memberClientId,
+				s.createMyLobbyJoinerUpdate(assignedId, player.Name),
+			)
+		}
+	}
+
 	s.queueServerUpdatesAndSignal(clientId,
 		s.createJoinLobbyReply(&Outcome{Ok: true}),
 		s.createNavigationUpdate(NavigationPath_MY_LOBBY),

@@ -20,9 +20,10 @@ message ClientUpdate {
 
         CreateLobbyRequest create_lobby_request = 4;
         JoinLobbyRequest join_lobby_request = 5;
+        LeaveMyLobbyRequest leave_my_lobby_request = 6;
 
-        CreateGameRequest create_game_request = 6;
-        MakeMoveRequest make_move_request = 7;
+        CreateGameRequest create_game_request = 7;
+        MakeMoveRequest make_move_request = 8;
     }
 }
 
@@ -121,6 +122,9 @@ message MyLobbyJoinerUpdate {
 
 message MyLobbyLeaverUpdate {
     Player player = 1;
+}
+
+message LeaveMyLobbyRequest {
 }
 
 message LeaveMyLobbyReply {
