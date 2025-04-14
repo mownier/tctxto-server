@@ -44,7 +44,7 @@ func (s *Server) joinLobby(clientId string, in *JoinLobbyRequest) error {
 		}
 		if memberClientId, exists := s.playerClient.get(member.Id); exists {
 			s.queueServerUpdatesAndSignal(memberClientId,
-				s.createMyLobbyJoinerUpdate(assignedId, player.Name),
+				s.createMyLobbyJoinerUpdate(assignedId, player.DisplayName),
 			)
 		}
 	}
