@@ -2,6 +2,7 @@ package server2
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"time"
 	"txtcto/models"
@@ -25,6 +26,7 @@ type Server struct {
 	playerClient                *safeMap[string, string]
 	playerLobby                 *safeMap[string, string]
 	lobbies                     *safeMap[string, *models.Lobby]
+	gameRematches               *safeMap[string, *models.GameRematch]
 
 	UnimplementedTicTacToeServer
 }
@@ -44,6 +46,7 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		playerClient:                newSafeMap[string, string](),
 		playerLobby:                 newSafeMap[string, string](),
 		lobbies:                     newSafeMap[string, *models.Lobby](),
+		gameRematches:               newSafeMap[string, *models.GameRematch](),
 	}
 }
 
@@ -145,4 +148,92 @@ func (s *Server) validatePlayer(clientId string) (*models.Player, *Outcome) {
 	}
 
 	return player, &Outcome{Ok: true}
+}
+
+func (s *Server) getClientIdAndPlayer(playerId string, alias string) (string, *models.Player, *Outcome) {
+	player, exists := s.players.get(playerId)
+	if !exists {
+		return "", nil, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.NotFound),
+			ErrorMessage: fmt.Sprintf("%s details not found", alias),
+		}
+	}
+
+	clientId, exists := s.playerClient.get(player.Id)
+	if !exists {
+		return "", nil, &Outcome{
+			Ok:           false,
+			ErrorCode:    int32(codes.NotFound),
+			ErrorMessage: fmt.Sprintf("client for %s found", alias),
+		}
+	}
+
+	return clientId, player, &Outcome{Ok: true}
+}
+
+func (s *Server) setupMover(game *models.Game, player1 *models.Player, player2 *models.Player) {
+	source := rand.NewSource(time.Now().UnixNano())
+	r := rand.New(source)
+	if r.Intn(2) == 1 {
+		game.MoverX = player1
+		game.MoverO = player2
+		game.Mover = game.MoverX
+	} else {
+		game.MoverO = player1
+		game.MoverX = player2
+		game.Mover = game.MoverO
+	}
+}
+
+func (s *Server) checkDraw(game *models.Game) bool {
+	for _, tile := range game.Board {
+		if tile == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Server) checkWin(game *models.Game) bool {
+	wins := [][]int{
+		{0, 1, 2}, {3, 4, 5}, {6, 7, 8}, // Rows
+		{0, 3, 6}, {1, 4, 7}, {2, 5, 8}, // Columns
+		{0, 4, 8}, {2, 4, 6}, // Diagonals
+	}
+	for _, win := range wins {
+		if game.Board[win[0]] != "" && game.Board[win[0]] == game.Board[win[1]] && game.Board[win[1]] == game.Board[win[2]] {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) switchMover(game *models.Game) {
+	if game.Mover.Id == game.MoverX.Id {
+		game.Mover = game.MoverO
+	} else if game.Mover.Id == game.MoverO.Id {
+		game.Mover = game.MoverX
+	}
+}
+
+func (s *Server) determineWinner(game *models.Game, you *models.Player) (Winner, Mover) {
+	var winner Winner
+	var mover Mover
+
+	if game.Mover.Id == you.Id {
+		winner = Winner_YOU
+	} else {
+		winner = Winner_OTHER
+	}
+
+	if game.Mover.Id == game.MoverX.Id {
+		mover = Mover_X
+	} else if game.Mover.Id == game.MoverO.Id {
+		mover = Mover_O
+	} else {
+		mover = Mover_UNSPECIFIED
+	}
+
+	return winner, mover
 }

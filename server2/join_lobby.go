@@ -1,7 +1,6 @@
 package server2
 
 import (
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 )
 
@@ -30,11 +29,7 @@ func (s *Server) joinLobby(clientId string, in *JoinLobbyRequest) error {
 		return nil
 	}
 
-	assignedId := uuid.New().String()
-
 	lobby.Players[player.Id] = player
-	lobby.AssignedIds[assignedId] = player.Id
-	lobby.PlayerAssignedId[player.Id] = assignedId
 
 	s.playerLobby.set(player.Id, lobby.Id)
 
@@ -44,7 +39,7 @@ func (s *Server) joinLobby(clientId string, in *JoinLobbyRequest) error {
 		}
 		if memberClientId, exists := s.playerClient.get(member.Id); exists {
 			s.queueServerUpdatesAndSignal(memberClientId,
-				s.createMyLobbyJoinerUpdate(assignedId, player.DisplayName),
+				s.createMyLobbyJoinerUpdate(player.Id, player.DisplayName),
 			)
 		}
 	}

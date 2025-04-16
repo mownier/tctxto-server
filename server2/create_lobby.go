@@ -32,19 +32,13 @@ func (s *Server) createLobby(clientId string, in *CreateLobbyRequest) error {
 		return nil
 	}
 
-	assignedId := uuid.New().String()
-
 	lobby := &models.Lobby{
-		Id:               lobbyId,
-		Name:             in.Name,
-		Creator:          player,
-		Players:          make(map[string]*models.Player),
-		AssignedIds:      make(map[string]string),
-		PlayerAssignedId: make(map[string]string),
+		Id:      lobbyId,
+		Name:    in.Name,
+		Creator: player,
+		Players: make(map[string]*models.Player),
 	}
 	lobby.Players[player.Id] = player
-	lobby.AssignedIds[assignedId] = player.Id
-	lobby.PlayerAssignedId[player.Id] = assignedId
 
 	s.lobbies.set(lobby.Id, lobby)
 	s.playerLobby.set(player.Id, lobby.Id)

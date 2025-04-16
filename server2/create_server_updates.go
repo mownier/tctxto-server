@@ -44,9 +44,7 @@ func (s *Server) createMyLobbyDetails(lobby *models.Lobby) *ServerUpdate {
 	players := make([]*Player, 0, len(lobby.Players))
 	for _, player := range lobby.Players {
 		if player != nil {
-			if assignedId, exists := lobby.PlayerAssignedId[player.Id]; exists {
-				players = append(players, &Player{Id: assignedId, Name: player.DisplayName})
-			}
+			players = append(players, &Player{Id: player.Id, Name: player.DisplayName})
 		}
 	}
 	return &ServerUpdate{
@@ -199,6 +197,54 @@ func (s *Server) createMyLobbyJoinerUpdate(id, name string) *ServerUpdate {
 			MyLobbyJoinerUpdate: &MyLobbyJoinerUpdate{
 				Player: &Player{Id: id, Name: name},
 			},
+		},
+	}
+}
+
+func (s *Server) createGameReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_CreateGameReply{
+			CreateGameReply: &CreateGameReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createMakeMoveReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_MakeMoveReply{
+			MakeMoveReply: &MakeMoveReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createWinnerUpdate(mover Mover, winner Winner, technicality Technicality) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_WinnerUpdate{
+			WinnerUpdate: &WinnerUpdate{
+				Mover:        mover,
+				Winner:       winner,
+				Technicality: technicality,
+			},
+		},
+	}
+}
+
+func (s *Server) createDrawUpdate() *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_DrawUpdate{
+			DrawUpdate: &DrawUpdate{},
+		},
+	}
+}
+
+func (s *Server) createRematchReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_RematchReply{
+			RematchReply: &RematchReply{Outcome: outcome},
 		},
 	}
 }

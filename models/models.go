@@ -10,12 +10,10 @@ type Client struct {
 }
 
 type Lobby struct {
-	Id               string
-	Name             string
-	Creator          *Player
-	Players          map[string]*Player
-	AssignedIds      map[string]string
-	PlayerAssignedId map[string]string
+	Id      string
+	Name    string
+	Creator *Player
+	Players map[string]*Player
 }
 
 type Player struct {
@@ -39,8 +37,13 @@ type Game struct {
 type GameResult int32
 
 const (
-	GameResult_INITIAL GameResult = 0
-	GameResult_ONGOING GameResult = 1
-	GameResult_WIN     GameResult = 2
-	GameResult_DRAW    GameResult = 3
+	GameResult_INITIAL        GameResult = 0
+	GameResult_ONGOING        GameResult = 1
+	GameResult_WIN            GameResult = 2
+	GameResult_DRAW           GameResult = 3
+	GameResult_WIN_BY_FORFEIT GameResult = 4
 )
+
+type GameRematch struct {
+	Players map[string]bool
+}

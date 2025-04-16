@@ -24,6 +24,7 @@ message ClientUpdate {
 
         CreateGameRequest create_game_request = 7;
         MakeMoveRequest make_move_request = 8;
+        RematchRequest rematch_request = 9;
     }
 }
 
@@ -53,9 +54,10 @@ message ServerUpdate {
         DrawUpdate draw_update = 17;
         GameStartUpdate game_start_update = 18;
         NextMoverUpdate next_mover_update = 19;
+        RematchReply rematch_reply = 20;
         
-        PlayerClientUpdate player_client_update = 20;
-        PlayerDisplayNameUpdate player_display_name_update = 21;
+        PlayerClientUpdate player_client_update = 21;
+        PlayerDisplayNameUpdate player_display_name_update = 22;
     }
 }
 
@@ -180,6 +182,7 @@ message CreateGameReply {
 message WinnerUpdate {
     Winner winner = 1;
     Mover mover = 2;
+    Technicality technicality = 3;
 }
 
 message DrawUpdate {
@@ -198,6 +201,14 @@ message PlayerDisplayNameUpdate {
     string displayName = 1;
 }
 
+message RematchRequest {
+    bool rematch = 1;
+}
+
+message RematchReply {
+    Outcome outcome = 1;
+}
+
 enum NavigationPath {
     WELCOME = 0;
     HOME = 1;
@@ -212,6 +223,11 @@ enum Mover {
 }
 
 enum Winner {
-    you = 0;
-    other = 1;
+    YOU = 0;
+    OTHER = 1;
+}
+
+enum Technicality {
+    NO_PROBLEM = 0;
+    BY_FORFEIT = 1;
 }

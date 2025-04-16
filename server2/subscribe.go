@@ -139,7 +139,7 @@ func (s *Server) initialServerUpdates(clientId string) []*ServerUpdate {
 
 	updates := []*ServerUpdate{s.createPlayerDisplayNameUpdate(player.DisplayName)}
 
-	gameUpdates := s.getGameInitialUpdates(clientId, player.Id)
+	gameUpdates := s.getGameInitialUpdates(player.Id)
 	if len(gameUpdates) > 0 {
 		return append(updates, gameUpdates...)
 	}
@@ -171,35 +171,44 @@ func (s *Server) getLobbyInitialUpdates(clientId, playerId string) []*ServerUpda
 	return nil
 }
 
-func (s *Server) getGameInitialUpdates(clientId, playerId string) []*ServerUpdate {
+func (s *Server) getGameInitialUpdates(playerId string) []*ServerUpdate {
 	gameId, ok := s.playerGame.get(playerId)
-	if ok {
-		if game, ok := s.games.get(gameId); ok {
-			if game.Result < models.GameResult_DRAW {
-				updates := []*ServerUpdate{}
-
-				updates = append(updates, s.createNavigationUpdate(NavigationPath_GAME))
-
-				you, other := s.getGamePlayers(game, playerId)
-
-				updates = append(updates,
-					s.createGameStartUpdate(game, you, other),
-					s.createNextMoverUpdate(game),
-				)
-
-				moveUpdates := s.createMoveUpdates(game)
-				updates = append(updates, moveUpdates...)
-
-				return updates
-			} else {
-				s.playerGame.delete(playerId)
-			}
-		} else {
-			s.playerGame.delete(playerId)
-		}
+	if !ok {
+		return []*ServerUpdate{}
 	}
 
-	return nil
+	game, ok := s.games.get(gameId)
+	if !ok {
+		s.playerGame.delete(playerId)
+		return []*ServerUpdate{}
+	}
+
+	updates := []*ServerUpdate{}
+
+	updates = append(updates, s.createNavigationUpdate(NavigationPath_GAME))
+
+	you, other := s.getGamePlayers(game, playerId)
+
+	updates = append(updates,
+		s.createGameStartUpdate(game, you, other),
+		s.createNextMoverUpdate(game),
+	)
+
+	moveUpdates := s.createMoveUpdates(game)
+	updates = append(updates, moveUpdates...)
+
+	switch game.Result {
+	case models.GameResult_DRAW:
+		updates = append(updates, s.createDrawUpdate())
+	case models.GameResult_WIN:
+		winner, mover := s.determineWinner(game, you)
+		updates = append(updates, s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM))
+	case models.GameResult_WIN_BY_FORFEIT:
+		winner, mover := s.determineWinner(game, you)
+		updates = append(updates, s.createWinnerUpdate(mover, winner, Technicality_BY_FORFEIT))
+	}
+
+	return updates
 }
 
 func (s *Server) getGamePlayers(game *models.Game, playerId string) (*models.Player, *models.Player) {

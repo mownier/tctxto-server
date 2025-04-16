@@ -30,6 +30,12 @@ func (s *Server) Notify(ctx context.Context, update *ClientUpdate) (*Empty, erro
 		err = s.joinLobby(clientId, update.JoinLobbyRequest)
 	case *ClientUpdate_LeaveMyLobbyRequest:
 		err = s.leaveMyLobby(clientId)
+	case *ClientUpdate_CreateGameRequest:
+		err = s.createGame(clientId, update.CreateGameRequest)
+	case *ClientUpdate_MakeMoveRequest:
+		err = s.makeMove(clientId, update.MakeMoveRequest)
+	case *ClientUpdate_RematchRequest:
+		err = s.rematch(clientId, update.RematchRequest)
 	}
 
 	if err != nil {

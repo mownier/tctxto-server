@@ -28,11 +28,7 @@ func (s *Server) leaveMyLobby(clientId string) error {
 		return nil
 	}
 
-	assignedId := lobby.PlayerAssignedId[player.Id]
-
 	delete(lobby.Players, player.Id)
-	delete(lobby.AssignedIds, assignedId)
-	delete(lobby.PlayerAssignedId, player.Id)
 
 	s.playerLobby.delete(player.Id)
 
@@ -42,7 +38,7 @@ func (s *Server) leaveMyLobby(clientId string) error {
 		}
 		if memberClientId, exists := s.playerClient.get(member.Id); exists {
 			s.queueServerUpdatesAndSignal(memberClientId,
-				s.createMyLobbyLeaverUpdate(assignedId, player.Name),
+				s.createMyLobbyLeaverUpdate(player.Id, player.Name),
 			)
 		}
 	}
