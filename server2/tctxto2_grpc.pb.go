@@ -20,6 +20,7 @@ const _ = grpc.SupportPackageIsVersion7
 type TicTacToeClient interface {
 	Subscribe(ctx context.Context, in *Empty, opts ...grpc.CallOption) (TicTacToe_SubscribeClient, error)
 	Notify(ctx context.Context, in *ClientUpdate, opts ...grpc.CallOption) (*Empty, error)
+	SubscribeBiDir(ctx context.Context, opts ...grpc.CallOption) (TicTacToe_SubscribeBiDirClient, error)
 }
 
 type ticTacToeClient struct {
@@ -71,12 +72,44 @@ func (c *ticTacToeClient) Notify(ctx context.Context, in *ClientUpdate, opts ...
 	return out, nil
 }
 
+func (c *ticTacToeClient) SubscribeBiDir(ctx context.Context, opts ...grpc.CallOption) (TicTacToe_SubscribeBiDirClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TicTacToe_ServiceDesc.Streams[1], "/server2.TicTacToe/SubscribeBiDir", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &ticTacToeSubscribeBiDirClient{stream}
+	return x, nil
+}
+
+type TicTacToe_SubscribeBiDirClient interface {
+	Send(*ClientUpdate) error
+	Recv() (*ServerUpdate, error)
+	grpc.ClientStream
+}
+
+type ticTacToeSubscribeBiDirClient struct {
+	grpc.ClientStream
+}
+
+func (x *ticTacToeSubscribeBiDirClient) Send(m *ClientUpdate) error {
+	return x.ClientStream.SendMsg(m)
+}
+
+func (x *ticTacToeSubscribeBiDirClient) Recv() (*ServerUpdate, error) {
+	m := new(ServerUpdate)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TicTacToeServer is the server API for TicTacToe service.
 // All implementations must embed UnimplementedTicTacToeServer
 // for forward compatibility
 type TicTacToeServer interface {
 	Subscribe(*Empty, TicTacToe_SubscribeServer) error
 	Notify(context.Context, *ClientUpdate) (*Empty, error)
+	SubscribeBiDir(TicTacToe_SubscribeBiDirServer) error
 	mustEmbedUnimplementedTicTacToeServer()
 }
 
@@ -89,6 +122,9 @@ func (UnimplementedTicTacToeServer) Subscribe(*Empty, TicTacToe_SubscribeServer)
 }
 func (UnimplementedTicTacToeServer) Notify(context.Context, *ClientUpdate) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Notify not implemented")
+}
+func (UnimplementedTicTacToeServer) SubscribeBiDir(TicTacToe_SubscribeBiDirServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeBiDir not implemented")
 }
 func (UnimplementedTicTacToeServer) mustEmbedUnimplementedTicTacToeServer() {}
 
@@ -142,6 +178,32 @@ func _TicTacToe_Notify_Handler(srv interface{}, ctx context.Context, dec func(in
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TicTacToe_SubscribeBiDir_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(TicTacToeServer).SubscribeBiDir(&ticTacToeSubscribeBiDirServer{stream})
+}
+
+type TicTacToe_SubscribeBiDirServer interface {
+	Send(*ServerUpdate) error
+	Recv() (*ClientUpdate, error)
+	grpc.ServerStream
+}
+
+type ticTacToeSubscribeBiDirServer struct {
+	grpc.ServerStream
+}
+
+func (x *ticTacToeSubscribeBiDirServer) Send(m *ServerUpdate) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func (x *ticTacToeSubscribeBiDirServer) Recv() (*ClientUpdate, error) {
+	m := new(ClientUpdate)
+	if err := x.ServerStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TicTacToe_ServiceDesc is the grpc.ServiceDesc for TicTacToe service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -159,6 +221,12 @@ var TicTacToe_ServiceDesc = grpc.ServiceDesc{
 			StreamName:    "Subscribe",
 			Handler:       _TicTacToe_Subscribe_Handler,
 			ServerStreams: true,
+		},
+		{
+			StreamName:    "SubscribeBiDir",
+			Handler:       _TicTacToe_SubscribeBiDir_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
 		},
 	},
 	Metadata: "server2/tctxto2.proto",

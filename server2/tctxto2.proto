@@ -6,7 +6,8 @@ option go_package = "tctxto/server2";
 
 service TicTacToe {
     rpc Subscribe(Empty) returns (stream ServerUpdate) {}
-    rpc Notify(ClientUpdate) returns (Empty) {}   
+    rpc Notify(ClientUpdate) returns (Empty) {}
+    rpc SubscribeBiDir(stream ClientUpdate) returns (stream ServerUpdate) {}   
 }
 
 message Empty {
