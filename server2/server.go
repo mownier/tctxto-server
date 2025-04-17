@@ -219,23 +219,6 @@ func (s *Server) switchMover(game *models.Game) {
 	}
 }
 
-func (s *Server) determineWinner(game *models.Game, you *models.Player) (Winner, Mover) {
-	var winner Winner
-	var mover Mover
-
-	if game.Mover.Id == you.Id {
-		winner = Winner_YOU
-	} else {
-		winner = Winner_OTHER
-	}
-
-	if game.Mover.Id == game.MoverX.Id {
-		mover = Mover_X
-	} else if game.Mover.Id == game.MoverO.Id {
-		mover = Mover_O
-	} else {
-		mover = Mover_UNSPECIFIED
-	}
-
-	return winner, mover
+func (s *Server) areYouTheMover(game *models.Game, you *models.Player) bool {
+	return game.Mover.Id == you.Id
 }

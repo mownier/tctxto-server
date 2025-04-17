@@ -3,7 +3,6 @@ package server2
 import (
 	"txtcto/models"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 )
 
@@ -68,12 +67,12 @@ func (s *Server) makeMove(playerYouClientId string, in *MakeMoveRequest) error {
 	} else {
 		playerOtherClientId, playerOther, outcome = s.getClientIdAndPlayer(game.MoverO.Id, "other player")
 	}
+
 	if !outcome.Ok {
 		game.Result = models.GameResult_WIN_BY_FORFEIT
-		winner, mover := s.determineWinner(game, playerYou)
 		s.queueServerUpdatesAndSignal(playerYouClientId,
 			s.createMakeMoveReply(&Outcome{Ok: true}),
-			s.createWinnerUpdate(mover, winner, Technicality_BY_FORFEIT),
+			s.createWinnerUpdate(s.areYouTheMover(game, playerYou), Technicality_BY_FORFEIT),
 		)
 		return nil
 	}
@@ -101,92 +100,52 @@ func (s *Server) makeMove(playerYouClientId string, in *MakeMoveRequest) error {
 
 	if s.checkWin(game) {
 		game.Result = models.GameResult_WIN
-		winner, mover := s.determineWinner(game, playerYou)
-		s.queueServerUpdatesAndSignal(playerYouClientId,
-			s.createMakeMoveReply(&Outcome{Ok: true}),
-			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-			s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM),
-		)
-		winner, mover = s.determineWinner(game, playerOther)
-		s.queueServerUpdatesAndSignal(playerOtherClientId,
-			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-			s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM),
-		)
 
-		rematchId := uuid.New().String()
+		_, outcome = s.setupRematch(playerYou, playerOther)
 
-		if _, exists := s.rematches.get(rematchId); exists {
-			updates := []*ServerUpdate{}
-			updates = append(updates, s.initialServerUpdates(playerOtherClientId)...)
-			s.queueServerUpdatesAndSignal(playerOtherClientId, updates...)
+		if outcome.Ok {
+			s.queueServerUpdatesAndSignal(playerYouClientId,
+				s.createMakeMoveReply(&Outcome{Ok: true}),
+				s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
+				s.createWinnerUpdate(s.areYouTheMover(game, playerYou), Technicality_NO_PROBLEM),
+			)
 
-			updates = []*ServerUpdate{}
-			updates = append(updates, s.initialServerUpdates(playerYouClientId)...)
-			s.queueServerUpdatesAndSignal(playerYouClientId, updates...)
+			s.queueServerUpdatesAndSignal(playerOtherClientId,
+				s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
+				s.createWinnerUpdate(s.areYouTheMover(game, playerOther), Technicality_NO_PROBLEM),
+			)
 
 			return nil
 		}
 
-		rematch := &models.Rematch{
-			Id:              rematchId,
-			PlayerDecisions: [2]*models.PlayerDecision{},
-		}
-		rematch.PlayerDecisions[0] = &models.PlayerDecision{
-			Player:   playerYou,
-			Decision: models.Decision_UNDECIDED,
-		}
-		rematch.PlayerDecisions[1] = &models.PlayerDecision{
-			Player:   playerOther,
-			Decision: models.Decision_UNDECIDED,
-		}
-		s.playerRematch.set(playerYou.Id, rematch.Id)
-		s.playerRematch.set(playerOther.Id, rematch.Id)
-		s.rematches.set(rematch.Id, rematch)
+		s.queueServerUpdatesAndSignal(playerYouClientId, s.initialServerUpdates(playerYouClientId)...)
+		s.queueServerUpdatesAndSignal(playerOtherClientId, s.initialServerUpdates(playerOtherClientId)...)
 
 		return nil
 	}
 
 	if s.checkDraw(game) {
 		game.Result = models.GameResult_DRAW
-		s.queueServerUpdatesAndSignal(playerYouClientId,
-			s.createMakeMoveReply(&Outcome{Ok: true}),
-			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-			s.createDrawUpdate(),
-		)
-		s.queueServerUpdatesAndSignal(playerOtherClientId,
-			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-			s.createDrawUpdate(),
-		)
 
-		rematchId := uuid.New().String()
+		_, outcome = s.setupRematch(playerYou, playerOther)
 
-		if _, exists := s.rematches.get(rematchId); exists {
-			updates := []*ServerUpdate{}
-			updates = append(updates, s.initialServerUpdates(playerOtherClientId)...)
-			s.queueServerUpdatesAndSignal(playerOtherClientId, updates...)
+		if outcome.Ok {
+			s.queueServerUpdatesAndSignal(playerYouClientId,
+				s.createMakeMoveReply(&Outcome{Ok: true}),
+				s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
+				s.createDrawUpdate(),
+			)
 
-			updates = []*ServerUpdate{}
-			updates = append(updates, s.initialServerUpdates(playerYouClientId)...)
+			s.queueServerUpdatesAndSignal(playerOtherClientId,
+				s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
+				s.createDrawUpdate(),
+			)
 
-			s.queueServerUpdatesAndSignal(playerYouClientId, updates...)
 			return nil
 		}
 
-		rematch := &models.Rematch{
-			Id:              rematchId,
-			PlayerDecisions: [2]*models.PlayerDecision{},
-		}
-		rematch.PlayerDecisions[0] = &models.PlayerDecision{
-			Player:   playerYou,
-			Decision: models.Decision_UNDECIDED,
-		}
-		rematch.PlayerDecisions[1] = &models.PlayerDecision{
-			Player:   playerOther,
-			Decision: models.Decision_UNDECIDED,
-		}
-		s.playerRematch.set(playerYou.Id, rematch.Id)
-		s.playerRematch.set(playerOther.Id, rematch.Id)
-		s.rematches.set(rematch.Id, rematch)
+		s.queueServerUpdatesAndSignal(playerYouClientId, s.initialServerUpdates(playerYouClientId)...)
+		s.queueServerUpdatesAndSignal(playerOtherClientId, s.initialServerUpdates(playerOtherClientId)...)
 
 		return nil
 	}
@@ -196,11 +155,12 @@ func (s *Server) makeMove(playerYouClientId string, in *MakeMoveRequest) error {
 	s.queueServerUpdatesAndSignal(playerYouClientId,
 		s.createMakeMoveReply(&Outcome{Ok: true}),
 		s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-		s.createNextMoverUpdate(game),
+		s.createNextMoverUpdate(s.areYouTheMover(game, playerYou)),
 	)
+
 	s.queueServerUpdatesAndSignal(playerOtherClientId,
 		s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
-		s.createNextMoverUpdate(game),
+		s.createNextMoverUpdate(s.areYouTheMover(game, playerOther)),
 	)
 
 	return nil

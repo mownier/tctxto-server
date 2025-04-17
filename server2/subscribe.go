@@ -144,12 +144,12 @@ func (s *Server) initialServerUpdates(clientId string) []*ServerUpdate {
 		return append(updates, rematchUpdates...)
 	}
 
-	gameUpdates := s.getGameInitialUpdates(player.Id)
+	gameUpdates := s.getGameInitialUpdates(player)
 	if len(gameUpdates) > 0 {
 		return append(updates, gameUpdates...)
 	}
 
-	lobbyUpdates := s.getLobbyInitialUpdates(clientId, player.Id)
+	lobbyUpdates := s.getLobbyInitialUpdates(player.Id)
 	if len(lobbyUpdates) > 0 {
 		return append(updates, lobbyUpdates...)
 	}
@@ -161,7 +161,7 @@ func (s *Server) cleanupClientResources(clientId string) {
 	s.clientSignal.delete(clientId)
 }
 
-func (s *Server) getLobbyInitialUpdates(clientId, playerId string) []*ServerUpdate {
+func (s *Server) getLobbyInitialUpdates(playerId string) []*ServerUpdate {
 	lobbyId, ok := s.playerLobby.get(playerId)
 	if ok {
 		if lobby, ok := s.lobbies.get(lobbyId); ok {
@@ -176,41 +176,32 @@ func (s *Server) getLobbyInitialUpdates(clientId, playerId string) []*ServerUpda
 	return nil
 }
 
-func (s *Server) getGameInitialUpdates(playerId string) []*ServerUpdate {
-	gameId, ok := s.playerGame.get(playerId)
+func (s *Server) getGameInitialUpdates(you *models.Player) []*ServerUpdate {
+	gameId, ok := s.playerGame.get(you.Id)
 	if !ok {
 		return []*ServerUpdate{}
 	}
 
 	game, ok := s.games.get(gameId)
 	if !ok {
-		s.playerGame.delete(playerId)
+		s.playerGame.delete(you.Id)
 		return []*ServerUpdate{}
 	}
 
-	updates := []*ServerUpdate{}
-
-	updates = append(updates, s.createNavigationUpdate(NavigationPath_GAME))
-
-	you, other := s.getGamePlayers(game, playerId)
-
-	updates = append(updates,
-		s.createGameStartUpdate(game, you, other),
-		s.createNextMoverUpdate(game),
-	)
-
-	moveUpdates := s.createMoveUpdates(game)
-	updates = append(updates, moveUpdates...)
+	updates := []*ServerUpdate{
+		s.createNavigationUpdate(NavigationPath_GAME),
+		s.createGameStartUpdate(game, you),
+		s.createNextMoverUpdate(s.areYouTheMover(game, you)),
+	}
+	updates = append(updates, s.createMoveUpdates(game)...)
 
 	switch game.Result {
 	case models.GameResult_DRAW:
 		updates = append(updates, s.createDrawUpdate())
 	case models.GameResult_WIN:
-		winner, mover := s.determineWinner(game, you)
-		updates = append(updates, s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM))
+		updates = append(updates, s.createWinnerUpdate(s.areYouTheMover(game, you), Technicality_NO_PROBLEM))
 	case models.GameResult_WIN_BY_FORFEIT:
-		winner, mover := s.determineWinner(game, you)
-		updates = append(updates, s.createWinnerUpdate(mover, winner, Technicality_BY_FORFEIT))
+		updates = append(updates, s.createWinnerUpdate(s.areYouTheMover(game, you), Technicality_BY_FORFEIT))
 	}
 
 	return updates
@@ -245,17 +236,4 @@ func (s *Server) getRematchInitialUpdates(playerId string) []*ServerUpdate {
 	}
 
 	return []*ServerUpdate{s.createNavigationUpdate(NavigationPath_REMATCH)}
-}
-
-func (s *Server) getGamePlayers(game *models.Game, playerId string) (*models.Player, *models.Player) {
-	var you *models.Player
-	var other *models.Player
-	if game.MoverX.Id == playerId {
-		you = game.MoverX
-		other = game.MoverO
-	} else if game.MoverO.Id == playerId {
-		you = game.MoverO
-		other = game.MoverX
-	}
-	return you, other
 }

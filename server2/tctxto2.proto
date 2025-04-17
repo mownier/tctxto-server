@@ -159,7 +159,7 @@ message MoveUpdate {
 }
 
 message NextMoverUpdate {
-    Mover mover = 1;
+    bool you = 1;
 }
 
 message MakeMoveRequest {
@@ -184,8 +184,7 @@ message CreateGameReply {
 }
 
 message WinnerUpdate {
-    Winner winner = 1;
-    Mover mover = 2;
+    bool you = 1;
     Technicality technicality = 3;
 }
 
@@ -194,7 +193,6 @@ message DrawUpdate {
 
 message GameStartUpdate {
     Mover you = 1;
-    Mover other = 2;
 }
 
 message PlayerClientUpdate {
@@ -231,14 +229,8 @@ enum NavigationPath {
 }
 
 enum Mover {
-    UNSPECIFIED = 0;
-    X = 1;
-    O = 2;
-}
-
-enum Winner {
-    YOU = 0;
-    OTHER = 1;
+    X = 0;
+    O = 1;
 }
 
 enum Technicality {

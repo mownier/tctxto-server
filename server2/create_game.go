@@ -62,13 +62,13 @@ func (s *Server) createGame(clientId string, in *CreateGameRequest) error {
 	s.queueServerUpdatesAndSignal(clientId, s.createGameReply(&Outcome{Ok: true}))
 	s.queueServerUpdatesAndSignal(player1ClientId,
 		s.createNavigationUpdate(NavigationPath_GAME),
-		s.createGameStartUpdate(game, player1, player2),
-		s.createNextMoverUpdate(game),
+		s.createGameStartUpdate(game, player1),
+		s.createNextMoverUpdate(s.areYouTheMover(game, player1)),
 	)
 	s.queueServerUpdatesAndSignal(player2ClientId,
 		s.createNavigationUpdate(NavigationPath_GAME),
-		s.createGameStartUpdate(game, player2, player1),
-		s.createNextMoverUpdate(game),
+		s.createGameStartUpdate(game, player2),
+		s.createNextMoverUpdate(s.areYouTheMover(game, player2)),
 	)
 
 	return nil

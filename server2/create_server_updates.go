@@ -56,39 +56,30 @@ func (s *Server) createMyLobbyDetails(lobby *models.Lobby) *ServerUpdate {
 	}
 }
 
-func (s *Server) createGameStartUpdate(game *models.Game, you, other *models.Player) *ServerUpdate {
-	moverYou := Mover_UNSPECIFIED
-	moverOther := Mover_UNSPECIFIED
-
+func (s *Server) createGameStartUpdate(game *models.Game, you *models.Player) *ServerUpdate {
 	if game.MoverX.Id == you.Id {
-		moverYou = Mover_X
-	} else if game.MoverO.Id == you.Id {
-		moverYou = Mover_O
+		return &ServerUpdate{
+			Type: &ServerUpdate_GameStartUpdate{
+				GameStartUpdate: &GameStartUpdate{You: Mover_X},
+			},
+		}
 	}
 
-	if game.MoverX.Id == other.Id {
-		moverOther = Mover_X
-	} else if game.MoverO.Id == other.Id {
-		moverOther = Mover_O
+	if game.MoverO.Id == you.Id {
+		return &ServerUpdate{
+			Type: &ServerUpdate_GameStartUpdate{
+				GameStartUpdate: &GameStartUpdate{You: Mover_O},
+			},
+		}
 	}
 
-	return &ServerUpdate{
-		Type: &ServerUpdate_GameStartUpdate{
-			GameStartUpdate: &GameStartUpdate{You: moverYou, Other: moverOther},
-		},
-	}
+	return s.createPing()
 }
 
-func (s *Server) createNextMoverUpdate(game *models.Game) *ServerUpdate {
-	mover := Mover_UNSPECIFIED
-	if game.Mover.Id == game.MoverX.Id {
-		mover = Mover_X
-	} else if game.Mover.Id == game.MoverO.Id {
-		mover = Mover_O
-	}
+func (s *Server) createNextMoverUpdate(you bool) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_NextMoverUpdate{
-			NextMoverUpdate: &NextMoverUpdate{Mover: mover},
+			NextMoverUpdate: &NextMoverUpdate{You: you},
 		},
 	}
 }
@@ -104,17 +95,23 @@ func (s *Server) createMoveUpdates(game *models.Game) []*ServerUpdate {
 }
 
 func (s *Server) createMoveUpdate(game *models.Game, playerId string, position int32) *ServerUpdate {
-	mover := Mover_UNSPECIFIED
 	if playerId == game.MoverX.Id {
-		mover = Mover_X
-	} else if playerId == game.MoverO.Id {
-		mover = Mover_O
+		return &ServerUpdate{
+			Type: &ServerUpdate_MoveUpdate{
+				MoveUpdate: &MoveUpdate{Move: &Move{Position: position, Mover: Mover_X}},
+			},
+		}
 	}
-	return &ServerUpdate{
-		Type: &ServerUpdate_MoveUpdate{
-			MoveUpdate: &MoveUpdate{Move: &Move{Position: position, Mover: mover}},
-		},
+
+	if playerId == game.MoverO.Id {
+		return &ServerUpdate{
+			Type: &ServerUpdate_MoveUpdate{
+				MoveUpdate: &MoveUpdate{Move: &Move{Position: position, Mover: Mover_O}},
+			},
+		}
 	}
+
+	return s.createPing()
 }
 
 func (s *Server) createSignInReply(outcome *Outcome) *ServerUpdate {
@@ -221,12 +218,11 @@ func (s *Server) createMakeMoveReply(outcome *Outcome) *ServerUpdate {
 	}
 }
 
-func (s *Server) createWinnerUpdate(mover Mover, winner Winner, technicality Technicality) *ServerUpdate {
+func (s *Server) createWinnerUpdate(you bool, technicality Technicality) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_WinnerUpdate{
 			WinnerUpdate: &WinnerUpdate{
-				Mover:        mover,
-				Winner:       winner,
+				You:          you,
 				Technicality: technicality,
 			},
 		},
