@@ -6,89 +6,137 @@ import (
 	"google.golang.org/grpc/codes"
 )
 
-func (s *Server) rematch(playerYouClientId string, in *RematchRequest) error {
-	playerYou, outcome := s.validatePlayer(playerYouClientId)
+func (s *Server) rematch(clientId string, in *RematchRequest) error {
+	player, outcome := s.validatePlayer(clientId)
 	if !outcome.Ok {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(outcome))
+		s.queueServerUpdatesAndSignal(clientId, s.createRematchReply(outcome))
+
 		return nil
 	}
 
-	gameId, exists := s.playerGame.get(playerYou.Id)
+	rematchId, exists := s.playerRematch.get(player.Id)
 	if !exists {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{
+		s.queueServerUpdatesAndSignal(clientId, s.createRematchReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.NotFound),
-			ErrorMessage: "you are not in a game",
+			ErrorMessage: "rematch not found",
 		}))
+
 		return nil
 	}
 
-	game, exists := s.games.get(gameId)
+	rematch, exists := s.rematches.get(rematchId)
 	if !exists {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{
+		s.queueServerUpdatesAndSignal(clientId, s.createRematchReply(&Outcome{
 			Ok:           false,
 			ErrorCode:    int32(codes.NotFound),
-			ErrorMessage: "your game not found",
+			ErrorMessage: "rematch details not found",
 		}))
+
 		return nil
 	}
 
-	if game.MoverO.Id != playerYou.Id || game.MoverX.Id != playerYou.Id {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{
+	pd, exists := rematch.GetPlayerDecision(player.Id)
+	if !exists {
+		s.queueServerUpdatesAndSignal(clientId, s.createRematchReply(&Outcome{
 			Ok:           false,
-			ErrorCode:    int32(codes.InvalidArgument),
-			ErrorMessage: "you are not a game participant",
+			ErrorCode:    int32(codes.NotFound),
+			ErrorMessage: "you are not one of the participants for the rematch",
 		}))
+
 		return nil
 	}
 
-	//var playerOtherClientId string
-	var playerOther *models.Player
-	if game.MoverO.Id == playerYou.Id {
-		_, playerOther, outcome = s.getClientIdAndPlayer(game.MoverX.Id, "other player")
+	if in.Yes {
+		rematch.SetPlayerDecision(pd.Player.Id, models.Decision_YES)
 	} else {
-		_, playerOther, outcome = s.getClientIdAndPlayer(game.MoverO.Id, "other player")
+		rematch.SetPlayerDecision(pd.Player.Id, models.Decision_NO)
 	}
 
-	if !outcome.Ok {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{
-			Ok:           false,
-			ErrorCode:    int32(codes.NotFound),
-			ErrorMessage: "other player details not found",
-		}))
-		return nil
+	var you *models.Player
+	var other *models.Player
+	if rematch.PlayerDecisions[0].Player.Id == player.Id {
+		you = rematch.PlayerDecisions[0].Player
+		other = rematch.PlayerDecisions[1].Player
+	} else {
+		you = rematch.PlayerDecisions[1].Player
+		other = rematch.PlayerDecisions[0].Player
 	}
 
-	if !in.Rematch {
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{Ok: true}))
-		// TODO:
-		return nil
+	game, upd := s.evaluateRematch(rematch)
+
+	updates := []*ServerUpdate{s.createRematchReply(&Outcome{Ok: true})}
+	if rematch.Pending() {
+		updates = append(updates, s.createNavigationUpdate(NavigationPath_REMATCH))
 	}
-
-	gameRematch, exists := s.gameRematches.get(game.Id)
-	if !exists {
-		gameRematch = &models.GameRematch{}
-		s.gameRematches.set(game.Id, gameRematch)
-	}
-
-	gameRematch.Players[playerYou.Id] = in.Rematch
-
-	if _, exists := gameRematch.Players[playerOther.Id]; !exists {
-		s.queueServerUpdatesAndSignal(playerYouClientId,
-			s.createRematchReply(&Outcome{Ok: true}),
-			// TODO
+	updates = append(updates, upd...)
+	if game != nil {
+		updates = append(updates,
+			s.createNavigationUpdate(NavigationPath_GAME),
+			s.createGameStartUpdate(game, you, other),
+			s.createNextMoverUpdate(game),
 		)
+	}
+	if rematch.Cancelled() {
+		updates = append(updates, s.initialServerUpdates(clientId)...)
+	}
+	s.queueServerUpdatesAndSignal(clientId, updates...)
+
+	otherClientId, exists := s.playerClient.get(other.Id)
+	if !exists {
 		return nil
 	}
 
-	s.queueServerUpdatesAndSignal(playerYouClientId, s.createRematchReply(&Outcome{Ok: true}))
-
-	s.playerGame.delete(playerYou.Id)
-	s.playerGame.delete(playerOther.Id)
-
-	if gameRematch.Players[playerYou.Id] && gameRematch.Players[playerOther.Id] {
-		return s.createGame(playerYouClientId, &CreateGameRequest{Player1Id: playerYou.Id, Player2Id: playerOther.Id})
+	updates = []*ServerUpdate{}
+	updates = append(updates, upd...)
+	if game != nil {
+		updates = append(updates,
+			s.createNavigationUpdate(NavigationPath_GAME),
+			s.createGameStartUpdate(game, other, you),
+			s.createNextMoverUpdate(game),
+		)
 	}
+	if rematch.Cancelled() {
+		updates = append(updates, s.initialServerUpdates(otherClientId)...)
+	}
+	s.queueServerUpdatesAndSignal(otherClientId, updates...)
 
 	return nil
+}
+
+func (s *Server) evaluateRematch(rematch *models.Rematch) (*models.Game, []*ServerUpdate) {
+	if rematch.Cancelled() {
+		for _, pd := range rematch.PlayerDecisions {
+			s.playerRematch.delete(pd.Player.Id)
+			s.playerGame.delete(pd.Player.Id)
+		}
+		s.rematches.delete(rematch.Id)
+
+		return nil, []*ServerUpdate{s.createRematchDenied()}
+	}
+
+	if rematch.Confirmed() {
+		for _, pd := range rematch.PlayerDecisions {
+			s.playerRematch.delete(pd.Player.Id)
+			s.playerGame.delete(pd.Player.Id)
+		}
+		s.rematches.delete(rematch.Id)
+		game, outcome := s.setupGame(
+			rematch.PlayerDecisions[0].Player,
+			rematch.PlayerDecisions[0].Player,
+			rematch.PlayerDecisions[1].Player,
+		)
+		if !outcome.Ok {
+			rematch.SetPlayerDecision(rematch.PlayerDecisions[0].Player.Id, models.Decision_NO)
+			rematch.SetPlayerDecision(rematch.PlayerDecisions[1].Player.Id, models.Decision_NO)
+			return nil, []*ServerUpdate{s.createRematchDenied()}
+		}
+		return game, []*ServerUpdate{s.createRematchApproved()}
+	}
+
+	if rematch.Pending() {
+		return nil, []*ServerUpdate{s.createRematchPending()}
+	}
+
+	return nil, []*ServerUpdate{}
 }

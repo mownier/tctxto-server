@@ -244,7 +244,33 @@ func (s *Server) createDrawUpdate() *ServerUpdate {
 func (s *Server) createRematchReply(outcome *Outcome) *ServerUpdate {
 	return &ServerUpdate{
 		Type: &ServerUpdate_RematchReply{
-			RematchReply: &RematchReply{Outcome: outcome},
+			RematchReply: &RematchReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createRematchDenied() *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_RematchDenied{
+			RematchDenied: &RematchDenied{},
+		},
+	}
+}
+
+func (s *Server) createRematchApproved() *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_RematchApproved{
+			RematchApproved: &RematchApproved{},
+		},
+	}
+}
+
+func (s *Server) createRematchPending() *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_RematchPending{
+			RematchPending: &RematchPending{},
 		},
 	}
 }

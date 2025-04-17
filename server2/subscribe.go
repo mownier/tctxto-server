@@ -139,6 +139,11 @@ func (s *Server) initialServerUpdates(clientId string) []*ServerUpdate {
 
 	updates := []*ServerUpdate{s.createPlayerDisplayNameUpdate(player.DisplayName)}
 
+	rematchUpdates := s.getRematchInitialUpdates(player.Id)
+	if len(rematchUpdates) > 0 {
+		return append(updates, rematchUpdates...)
+	}
+
 	gameUpdates := s.getGameInitialUpdates(player.Id)
 	if len(gameUpdates) > 0 {
 		return append(updates, gameUpdates...)
@@ -209,6 +214,37 @@ func (s *Server) getGameInitialUpdates(playerId string) []*ServerUpdate {
 	}
 
 	return updates
+}
+
+func (s *Server) getRematchInitialUpdates(playerId string) []*ServerUpdate {
+	rematchId, exists := s.playerRematch.get(playerId)
+	if !exists {
+		return []*ServerUpdate{}
+	}
+
+	rematch, exists := s.rematches.get(rematchId)
+	if !exists {
+		s.playerRematch.delete(playerId)
+		return []*ServerUpdate{}
+	}
+
+	pd, exists := rematch.GetPlayerDecision(playerId)
+	if !exists {
+		for _, pd := range rematch.PlayerDecisions {
+			if pd.Player.Id == playerId {
+				s.playerRematch.delete(pd.Player.Id)
+				break
+			}
+		}
+		s.rematches.delete(rematch.Id)
+		return []*ServerUpdate{}
+	}
+
+	if pd.Decision == models.Decision_UNDECIDED || pd.Decision == models.Decision_NO {
+		return []*ServerUpdate{}
+	}
+
+	return []*ServerUpdate{s.createNavigationUpdate(NavigationPath_REMATCH)}
 }
 
 func (s *Server) getGamePlayers(game *models.Game, playerId string) (*models.Player, *models.Player) {

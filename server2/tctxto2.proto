@@ -54,10 +54,14 @@ message ServerUpdate {
         DrawUpdate draw_update = 17;
         GameStartUpdate game_start_update = 18;
         NextMoverUpdate next_mover_update = 19;
-        RematchReply rematch_reply = 20;
         
-        PlayerClientUpdate player_client_update = 21;
-        PlayerDisplayNameUpdate player_display_name_update = 22;
+        PlayerClientUpdate player_client_update = 20;
+        PlayerDisplayNameUpdate player_display_name_update = 21;
+
+        RematchReply rematch_reply = 22;
+        RematchDenied rematch_denied = 23;
+        RematchApproved rematch_approved = 24;
+        RematchPending rematch_pending = 25;
     }
 }
 
@@ -202,11 +206,20 @@ message PlayerDisplayNameUpdate {
 }
 
 message RematchRequest {
-    bool rematch = 1;
+    bool yes = 1;
 }
 
 message RematchReply {
     Outcome outcome = 1;
+}
+
+message RematchDenied {
+}
+
+message RematchApproved {
+}
+
+message RematchPending {
 }
 
 enum NavigationPath {
@@ -214,6 +227,7 @@ enum NavigationPath {
     HOME = 1;
     MY_LOBBY = 2;
     GAME = 3;
+    REMATCH = 4;
 }
 
 enum Mover {

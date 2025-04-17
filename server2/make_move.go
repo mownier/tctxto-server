@@ -1,9 +1,9 @@
 package server2
 
 import (
-	"time"
 	"txtcto/models"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 )
 
@@ -107,16 +107,42 @@ func (s *Server) makeMove(playerYouClientId string, in *MakeMoveRequest) error {
 			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
 			s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM),
 		)
+		winner, mover = s.determineWinner(game, playerOther)
 		s.queueServerUpdatesAndSignal(playerOtherClientId,
 			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
 			s.createWinnerUpdate(mover, winner, Technicality_NO_PROBLEM),
 		)
-		s.playerGame.delete(playerYou.Id)
-		s.playerGame.delete(playerOther.Id)
-		timeInterval := 5 * time.Second
-		<-time.After(timeInterval)
-		s.queueServerUpdatesAndSignal(playerOtherClientId, s.initialServerUpdates(playerOtherClientId)...)
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.initialServerUpdates(playerYouClientId)...)
+
+		rematchId := uuid.New().String()
+
+		if _, exists := s.rematches.get(rematchId); exists {
+			updates := []*ServerUpdate{}
+			updates = append(updates, s.initialServerUpdates(playerOtherClientId)...)
+			s.queueServerUpdatesAndSignal(playerOtherClientId, updates...)
+
+			updates = []*ServerUpdate{}
+			updates = append(updates, s.initialServerUpdates(playerYouClientId)...)
+			s.queueServerUpdatesAndSignal(playerYouClientId, updates...)
+
+			return nil
+		}
+
+		rematch := &models.Rematch{
+			Id:              rematchId,
+			PlayerDecisions: [2]*models.PlayerDecision{},
+		}
+		rematch.PlayerDecisions[0] = &models.PlayerDecision{
+			Player:   playerYou,
+			Decision: models.Decision_UNDECIDED,
+		}
+		rematch.PlayerDecisions[1] = &models.PlayerDecision{
+			Player:   playerOther,
+			Decision: models.Decision_UNDECIDED,
+		}
+		s.playerRematch.set(playerYou.Id, rematch.Id)
+		s.playerRematch.set(playerOther.Id, rematch.Id)
+		s.rematches.set(rematch.Id, rematch)
+
 		return nil
 	}
 
@@ -131,12 +157,37 @@ func (s *Server) makeMove(playerYouClientId string, in *MakeMoveRequest) error {
 			s.createMoveUpdate(game, playerYou.Id, int32(in.Position)),
 			s.createDrawUpdate(),
 		)
-		s.playerGame.delete(playerYou.Id)
-		s.playerGame.delete(playerOther.Id)
-		timeInterval := 5 * time.Second
-		<-time.After(timeInterval)
-		s.queueServerUpdatesAndSignal(playerOtherClientId, s.initialServerUpdates(playerOtherClientId)...)
-		s.queueServerUpdatesAndSignal(playerYouClientId, s.initialServerUpdates(playerYouClientId)...)
+
+		rematchId := uuid.New().String()
+
+		if _, exists := s.rematches.get(rematchId); exists {
+			updates := []*ServerUpdate{}
+			updates = append(updates, s.initialServerUpdates(playerOtherClientId)...)
+			s.queueServerUpdatesAndSignal(playerOtherClientId, updates...)
+
+			updates = []*ServerUpdate{}
+			updates = append(updates, s.initialServerUpdates(playerYouClientId)...)
+
+			s.queueServerUpdatesAndSignal(playerYouClientId, updates...)
+			return nil
+		}
+
+		rematch := &models.Rematch{
+			Id:              rematchId,
+			PlayerDecisions: [2]*models.PlayerDecision{},
+		}
+		rematch.PlayerDecisions[0] = &models.PlayerDecision{
+			Player:   playerYou,
+			Decision: models.Decision_UNDECIDED,
+		}
+		rematch.PlayerDecisions[1] = &models.PlayerDecision{
+			Player:   playerOther,
+			Decision: models.Decision_UNDECIDED,
+		}
+		s.playerRematch.set(playerYou.Id, rematch.Id)
+		s.playerRematch.set(playerOther.Id, rematch.Id)
+		s.rematches.set(rematch.Id, rematch)
+
 		return nil
 	}
 
