@@ -19,7 +19,7 @@ import (
 )
 
 func main() {
-	port := os.Getenv("TCTXTO_PORT")
+	port := os.Getenv("TCTXTO_SERVER_PORT")
 	enableReflectionStr := os.Getenv("TCTXTO_ENABLE_RELECTION")
 	consumersPath := os.Getenv("TCTXTO_CONSUMERS")
 
@@ -76,15 +76,37 @@ func main() {
 	// Start a separate HTTP server for pprof (choose a different port)
 	go func() {
 		pprofPort := ":6060" // Example port
-		log.Printf("pprof server listening on %s", pprofPort)
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			log.Fatalf("error getting network interfaces: %v\n", err)
+		}
+		for _, addr := range addrs {
+			if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+				if ipnet.IP.To4() != nil {
+					localIP := ipnet.IP.String()
+					log.Printf("tctxto server pprof running on http://%s%s\n", localIP, pprofPort)
+				}
+			}
+		}
 		if err := http.ListenAndServe(pprofPort, nil); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("pprof server ListenAndServe: %v", err)
+			log.Fatalf("tctxto server pprof failed to listen and serve: %v", err)
 		}
 	}()
 
-	fmt.Printf("listening on tcp://localhost:%s\n", port)
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		log.Fatalf("error getting network interfaces: %v\n", err)
+	}
+	for _, addr := range addrs {
+		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+			if ipnet.IP.To4() != nil {
+				localIP := ipnet.IP.String()
+				log.Printf("tctxto server running on tcp://%s:%s\n", localIP, port)
+			}
+		}
+	}
 
 	if err := s.Serve(lis); err != nil {
-		log.Fatalf("failed to serve: %v\n", err)
+		log.Fatalf("tctxto server failed to serve: %v\n", err)
 	}
 }
