@@ -9,6 +9,12 @@ build-windows:
 
 build-all: build-macos build-linux build-windows
 
+build:
+	go build -o tctxtosv
+
+build-w:
+	go build -o tctxtosv.exe
+
 run:
 	go build -o tctxtosv && ./tctxtosv
 
