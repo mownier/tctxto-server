@@ -5,7 +5,7 @@ build-linux:
 	GOOS=linux GOARCH=amd64 go build -o build/linux/tctxtosv
 
 build-windows:
-	GOOS=windows GOARCH=amd64 go build -o build/windows/tctxtosv
+	GOOS=windows GOARCH=amd64 go build -o build/windows/tctxtosv.exe
 
 build-all: build-macos build-linux build-windows
 
