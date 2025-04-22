@@ -16,9 +16,16 @@ import (
 
 	"net/http"
 	_ "net/http/pprof"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatalln("The .env file is not found. It should have TCTXTO_SERVER_PORT=3232, TCTXTO_ENABLE_RELECTION=false, and TCTXTO_CONSUMERS=?.")
+	}
+
 	port := os.Getenv("TCTXTO_SERVER_PORT")
 	enableReflectionStr := os.Getenv("TCTXTO_ENABLE_RELECTION")
 	consumersPath := os.Getenv("TCTXTO_CONSUMERS")
