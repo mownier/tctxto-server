@@ -36,6 +36,8 @@ func (s *Server) Notify(ctx context.Context, update *ClientUpdate) (*Empty, erro
 		err = s.makeMove(clientId, update.MakeMoveRequest)
 	case *ClientUpdate_RematchRequest:
 		err = s.rematch(clientId, update.RematchRequest)
+	case *ClientUpdate_ChangePlayerDisplayNameRequest:
+		err = s.changePlayerDisplayName(clientId, update.ChangePlayerDisplayNameRequest)
 	}
 
 	if err != nil {

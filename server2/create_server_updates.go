@@ -270,3 +270,11 @@ func (s *Server) createRematchPending() *ServerUpdate {
 		},
 	}
 }
+
+func (s *Server) createChangePlayerDisplayNameReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_ChangePlayerDisplayNameReply{
+			ChangePlayerDisplayNameReply: &ChangePlayerDisplayNameReply{Outcome: outcome},
+		},
+	}
+}

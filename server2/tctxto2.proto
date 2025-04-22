@@ -26,6 +26,8 @@ message ClientUpdate {
         CreateGameRequest create_game_request = 7;
         MakeMoveRequest make_move_request = 8;
         RematchRequest rematch_request = 9;
+
+        ChangePlayerDisplayNameRequest change_player_display_name_request = 10;
     }
 }
 
@@ -63,6 +65,8 @@ message ServerUpdate {
         RematchDenied rematch_denied = 23;
         RematchApproved rematch_approved = 24;
         RematchPending rematch_pending = 25;
+
+        ChangePlayerDisplayNameReply change_player_display_name_reply = 26;
     }
 }
 
@@ -219,6 +223,14 @@ message RematchApproved {
 }
 
 message RematchPending {
+}
+
+message ChangePlayerDisplayNameRequest{
+    string displayName = 1;
+}
+
+message ChangePlayerDisplayNameReply{
+    Outcome outcome = 1;
 }
 
 enum NavigationPath {
