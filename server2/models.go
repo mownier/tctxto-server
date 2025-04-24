@@ -28,6 +28,16 @@ func (m *safeMap[K, V]) delete(k K) {
 	delete(m.data, k)
 }
 
+func (m *safeMap[K, V]) forEach(f func(k K, v V) bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for k, v := range m.data {
+		if !f(k, v) {
+			break
+		}
+	}
+}
+
 func newSafeMapWith[K comparable, V any](data map[K]V) *safeMap[K, V] {
 	return &safeMap[K, V]{
 		data: data,

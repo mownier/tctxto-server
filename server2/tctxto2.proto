@@ -28,6 +28,7 @@ message ClientUpdate {
         RematchRequest rematch_request = 9;
 
         ChangePlayerDisplayNameRequest change_player_display_name_request = 10;
+        LobbySearchRequest lobby_search_request = 11;
     }
 }
 
@@ -67,6 +68,8 @@ message ServerUpdate {
         RematchPending rematch_pending = 25;
 
         ChangePlayerDisplayNameReply change_player_display_name_reply = 26;
+        LobbySearchReply lobby_search_reply = 27;
+        LobbySearchResult lobby_search_result = 28;
     }
 }
 
@@ -231,6 +234,18 @@ message ChangePlayerDisplayNameRequest{
 
 message ChangePlayerDisplayNameReply{
     Outcome outcome = 1;
+}
+
+message LobbySearchRequest {
+    string name = 1;
+}
+
+message LobbySearchReply {
+    Outcome outcome = 1;
+}
+
+message LobbySearchResult {
+    repeated Lobby lobbies = 1;
 }
 
 enum NavigationPath {

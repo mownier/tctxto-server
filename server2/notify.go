@@ -38,6 +38,8 @@ func (s *Server) Notify(ctx context.Context, update *ClientUpdate) (*Empty, erro
 		err = s.rematch(clientId, update.RematchRequest)
 	case *ClientUpdate_ChangePlayerDisplayNameRequest:
 		err = s.changePlayerDisplayName(clientId, update.ChangePlayerDisplayNameRequest)
+	case *ClientUpdate_LobbySearchRequest:
+		err = s.searchLobby(clientId, update.LobbySearchRequest)
 	}
 
 	if err != nil {

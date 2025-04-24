@@ -278,3 +278,27 @@ func (s *Server) createChangePlayerDisplayNameReply(outcome *Outcome) *ServerUpd
 		},
 	}
 }
+
+func (s *Server) createLobbySearchReply(outcome *Outcome) *ServerUpdate {
+	return &ServerUpdate{
+		Type: &ServerUpdate_LobbySearchReply{
+			LobbySearchReply: &LobbySearchReply{
+				Outcome: outcome,
+			},
+		},
+	}
+}
+
+func (s *Server) createLobbySearchResult(list []*models.Lobby) *ServerUpdate {
+	lobbies := []*Lobby{}
+	for _, l := range list {
+		lobbies = append(lobbies, &Lobby{Id: l.Id, Name: l.Name})
+	}
+	return &ServerUpdate{
+		Type: &ServerUpdate_LobbySearchResult{
+			LobbySearchResult: &LobbySearchResult{
+				Lobbies: lobbies,
+			},
+		},
+	}
+}

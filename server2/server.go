@@ -28,6 +28,7 @@ type Server struct {
 	lobbies                     *safeMap[string, *models.Lobby]
 	rematches                   *safeMap[string, *models.Rematch]
 	playerRematch               *safeMap[string, string]
+	playerSearchingLobby        *safeMap[string, bool]
 
 	UnimplementedTicTacToeServer
 }
@@ -49,6 +50,7 @@ func NewServer(consumers map[string]*models.Consumer) *Server {
 		lobbies:                     newSafeMap[string, *models.Lobby](),
 		rematches:                   newSafeMap[string, *models.Rematch](),
 		playerRematch:               newSafeMap[string, string](),
+		playerSearchingLobby:        newSafeMap[string, bool](),
 	}
 }
 
